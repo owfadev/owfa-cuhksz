@@ -14,7 +14,7 @@
 
 - Materialization zone `cuhksz/sis/`: official personal PDFs, append-only (unlike the bb courseware workspace — this zone receives only school-issued enrollment documents)
 - Territory `wiki/cuhksz/sis/`: inbox.md digest page (recent window: schedule overview/registration windows/holds/grade snapshot; rows tagged with term; whole page regenerable with short TTL, created when absent) + docs/ proxy pages (raw_file/raw_sha256 pointing into the materialization zone)
-- The connector sis-cli (connectors/sis-cli/): ADFS OAuth2 same-source + PeopleSoft PIA adaptation (PS_DEVICEFEATURES shell-breaking, direct psc+PTCNAV component hits, term radio POST), fully read-only
+- The sis backend of the unified cuhksz-cli connector (connectors/cuhksz-cli/, siscli module; legacy sis-cli wrapper equivalent): ADFS OAuth2 same-source + PeopleSoft PIA adaptation (PS_DEVICEFEATURES shell-breaking, direct psc+PTCNAV component hits, term radio POST), fully read-only
 
 ## Invariants
 
@@ -25,6 +25,8 @@
 - Credential discipline: stored locally at ~/.sis-cli/, never in the repository
 
 ## Changelog
+
+- 0.4 (2026-11-12) connector aggregation: sis-cli merged into the unified cuhksz-cli connector as its sis backend (legacy sis-cli entry point kept as a thin wrapper); connector references updated, credential store ~/.sis-cli/ unchanged
 
 - 0.3 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 

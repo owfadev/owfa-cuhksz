@@ -1,13 +1,12 @@
 schema_version: 1
 id: cuhksz
-version: 0.2
+version: 0.2.1
 compat: ">= 0.2"
 members: [cuhksz, bb, bb-map, bb-quiz, bb-teach, bb-track, sis, registry]
 connectors:
-  - name: bb-cli
-    path: connectors/bb-cli
-  - name: sis-cli
-    path: connectors/sis-cli
+  - name: cuhksz-cli
+    path: connectors/cuhksz-cli
+    note: "unified entry since 0.2.1 — 'cuhksz-cli bb ...' (Blackboard, bbcli backend) and 'cuhksz-cli sis ...' (PeopleSoft SIS, siscli backend); the legacy bb-cli / sis-cli console scripts remain as thin wrappers over the same backends; credential stores unchanged (~/.bb-cli/, ~/.sis-cli/)
 depends: [framework]
 uninstall:
   retains: [wiki/cuhksz/, cuhksz/]

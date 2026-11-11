@@ -31,6 +31,8 @@
 
 ## Changelog
 
+- 0.21 2026-11-12: connector aggregation follow-up — the bbcli skill references in the command skill reworded to the unified cuhksz-cli (bb backend); command surface unchanged
+
 - 0.17 (2026-10-07): map-first prerequisite + source citation — bb-map is the prerequisite for all course tasks (full-course mapping runs first; the mapping is their single basis), and raw_path + sm-N are the citation anchors for derived content, every generated claim traces back to its source (PR #23, collapsed past master's 0.16 inject_tier entry)
 - 0.16 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 

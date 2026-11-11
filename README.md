@@ -1,6 +1,8 @@
-# pkg-cuhksz
+# owfa-cuhksz
 ## Why you'd want this
 Compliance basis and usage rules: [COMPLIANCE.md](COMPLIANCE.md) — own-credential read-only pulls inside CUHK-SZ ITSO rules; personal-study use, no bulk crawls.
+
+One unified read-only connector (`cuhksz-cli bb` / `cuhksz-cli sis`; legacy `bb-cli` / `sis-cli` wrappers kept) powers everything.
 
 Course operations on autopilot for CUHK-SZ students: courseware, deadlines, announcements and grades pulled from Blackboard and SIS into the wiki, with a per-course cognition profile.
 

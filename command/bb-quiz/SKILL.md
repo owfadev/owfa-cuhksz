@@ -69,7 +69,7 @@ Question-stem language follows the source — samples → known assignments → 
 - attachments proxies: one page per teacher-released non-handout asset (raw_file/raw_sha256), flat; structural facts like TA/grouping get no attachment pages
 - Placement criteria (see the injection line)
 - Rebuild discipline: the mechanical region is reconciled and overwritten; the accumulation regions (info notes / assessments review) are append-only, rebuilds must not touch them; attachments proxies are whole-page regenerable
-- stale handling: assessments results and info basic information carry stale_after; when stale, refresh via a fresh bbcli pull (the agent is the synchronizer); courseware/attachments are purely local reconciliation, no TTL
+- stale handling: assessments results and info basic information carry stale_after; when stale, refresh via a fresh cuhksz-cli bb pull (the agent is the synchronizer); courseware/attachments are purely local reconciliation, no TTL
 - Map-first prerequisite: bb-map is the prerequisite for all course tasks (teaching/quiz/review/Q&A) — run full-course mapping before any of them; the mapping is their single basis (sm-N/info/assessments), never raw source or ad-hoc reading — except the teaching-side unmapped-concept fallback (predict location → read raw → parse → propose mapping the concept back as a new sm-N, emergence-based)
 - Source citation: raw_path + sm-N are the citation anchors — derived content (notes/reviews/answers) cites its source (courseware/textbook) through them
 - Post-write pipeline (mechanical, automatic): python .meta/scripts/pipeline.py index + tags + hot + log + verify (rebuild the derived layer first, then validate — validation closes at the end, avoiding premature false drift reports from the derived zones)
