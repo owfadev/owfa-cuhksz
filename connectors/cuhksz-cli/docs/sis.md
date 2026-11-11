@@ -1,10 +1,12 @@
-# sis-cli — CUHK-SZ SIS Read-Only CLI Connector
+# sis backend (cuhksz-cli sis) — CUHK-SZ SIS read-only connector
+
+> Per-backend deep reference of the unified `cuhksz-cli` connector (since 0.2.1; formerly the standalone `connectors/sis-cli` package). Entry points `cuhksz-cli sis ...` and the legacy `sis-cli ...` wrapper are equivalent.
 
 A command-line connector for `sis.cuhk.edu.cn` (Oracle PeopleSoft Campus Solutions): **a purely read-only data plane — no agent logic, no MCP, no monitoring** — serving as a fact interface for upper layers (wiki domain plugins / humans / scripts). The technical route and login findings carry over from bb-cli (the same ADFS `sts.cuhk.edu.cn`, the same `cuhksz\` domain-prefix rule); the PeopleSoft-side login and component access were written from live reverse engineering on 2026-10-05.
 
 ## Installation
 
-Use the instance's declared Python environment when one exists. Otherwise, from `connectors/sis-cli`, choose one of these isolated environments; activation and global PATH changes are unnecessary.
+Use the instance's declared Python environment when one exists. Otherwise, from `connectors/cuhksz-cli` (the unified connector this doc belongs to), choose one of these isolated environments; activation and global PATH changes are unnecessary.
 
 Windows (PowerShell or Git Bash):
 
