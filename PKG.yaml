@@ -14,7 +14,7 @@ uninstall:
   credentials: [~/.bb-cli/, ~/.sis-cli/]
   bridges: [profile#domain-cognition, language#consumers]
   processes: []
-disclosure: "Read-only scraping of bb.cuhk.edu.cn and sis.cuhk.edu.cn via ADFS SSO; processes grades, coursework and enrollment records (privacy: high); credentials only on this machine (~/.bb-cli, ~/.sis-cli); academic data never enters any git repository."
+disclosure: "Read-only scraping of bb.cuhk.edu.cn and sis.cuhk.edu.cn via ADFS SSO; processes grades, coursework and enrollment records (privacy: high); credentials are kept in local user directories (~/.bb-cli, ~/.sis-cli), and login may save passwords; cloud AI processing can send task material to the selected provider; academic data must never enter any git repository. Read the User Notice before setup: https://github.com/owfadev/pkg-cuhksz/blob/master/USER_NOTICE.md (English; Chinese linked within)."
 menu:
   cuhksz: domain root — identity page, term digest, family territory
   bb: course-ops base — term/course identity pages
