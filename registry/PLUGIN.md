@@ -3,7 +3,7 @@
 ## Design Summary
 
 - **Why it exists**: curriculum schemes, GE/PE/national-condition requirements and other institutional documents decide 'what must be taken, what counts as adequate' — the institutional framework of a degree. The source is the Registry's official site (registry.cuhk.edu.cn), no API, no connector; manual download with materialization + pointer navigation is currently the only route
-- **Position in the family**: a subsystem inside the cuhksz domain, peer of bb/sis; one of the dual sources of institutional cross-checking (the institutional source) — the dynamic source being the sis-cli Degree Progress Report (DPR)
+- **Position in the family**: a subsystem inside the cuhksz domain, peer of bb/sis; one of the dual sources of institutional cross-checking (the institutional source) — the dynamic source being the cuhksz-cli sis dpr (Degree Progress Report)
 - **Key rulings**:
   - **pointers first, materialization on demand** (projection density follows translation cost): fully materializing 40+ majors × multiple cohort batches of PDFs is not worth it — the index page gives full pointers (URLs); only the user's relevant schemes are materialized into the zone
   - institutional documents separated from personal assets: official public PDFs (curriculum schemes) live in cuhksz/registry/; personal official documents (enrollment certificates/transcripts) go through vault — the dividing line is 'public institution vs personal certificate'
@@ -25,6 +25,8 @@
 - Dual-source cross-checking: this zone's institutional provisions (authoritative) + the DPR's dynamic computation (real-time) — conclusions enter notes after confirmation, with backlinks
 
 ## Changelog
+
+- 0.3 (2026-11-12) connector aggregation follow-up: sis-cli DPR references reworded to the unified cuhksz-cli sis dpr
 
 - 0.2 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 

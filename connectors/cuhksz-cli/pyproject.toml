@@ -1,0 +1,22 @@
+[project]
+name = "cuhkszcli"
+version = "0.2.1"
+description = "CUHK-SZ unified read-only CLI connector (bb.cuhk.edu.cn Blackboard + sis.cuhk.edu.cn PeopleSoft SIS)"
+requires-python = ">=3.10"
+dependencies = [
+    "curl_cffi>=0.7",
+    "beautifulsoup4>=4.12",
+]
+
+[project.scripts]
+cuhksz-cli = "cuhkszcli.cli:main"
+# backward-compat thin wrappers: identical behavior to `cuhksz-cli bb|sis ...`
+bb-cli = "bbcli.cli:main"
+sis-cli = "siscli.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["cuhkszcli", "bbcli", "siscli"]

@@ -2,7 +2,7 @@
 
 ## Design Summary
 
-- **Why it exists**: a student's complete picture at one school = enrollment identity (sis) + course operations (bb) + institutional rules (registry); the three share one identity source (the student ID) and one unified authentication (STS ADFS — bb-cli/sis-cli verified to share it in practice). The domain's mission is 'the complete adaptation of one class of external sources', and a school is exactly that class — bb and sis are subsystems inside the domain, not parallel domains, aligned with the lark precedent (enterprise base + docs/im/calendar subdomain family). This plugin is the domain base: it only establishes the answers to the six contract questions and the identity proof, holding no content
+- **Why it exists**: a student's complete picture at one school = enrollment identity (sis) + course operations (bb) + institutional rules (registry); the three share one identity source (the student ID) and one unified authentication (STS ADFS — the bb/sis backends, standalone bb-cli/sis-cli at the time, verified to share it in practice; both now live inside the unified cuhksz-cli connector). The domain's mission is 'the complete adaptation of one class of external sources', and a school is exactly that class — bb and sis are subsystems inside the domain, not parallel domains, aligned with the lark precedent (enterprise base + docs/im/calendar subdomain family). This plugin is the domain base: it only establishes the answers to the six contract questions and the identity proof, holding no content
 - **Key rulings**:
   - 2026-10-05 owner ruling: bb demoted from an independent domain **to an in-domain plugin family** — migration cost is lowest at the single-term data point; umbrella-domain attachment (a domain hanging off a domain) was rejected as semantically fractured
   - the bb family's five plugins **keep their original names without a prefix** (bb, bb-map...) — a full-chain rename (manifest/command/skill/changelog) yields nothing; 'structure is specified by each plugin', the naming convention is not mandatory
@@ -14,7 +14,7 @@
 
 - Data zone `cuhksz/` (root container): `bb/` (course operations workspace, governed by the bb domain plugin) + `sis/` (official personal document materialization zone, governed by the sis domain plugin — receives only school-issued enrollment documents, not general data) + `registry/` (academic regulations materialization zone, governed by the registry domain plugin)
 - Territory `wiki/cuhksz/`: `identity.md` (domain declaration page) + `bb/` + `sis/` + `registry/` (each governed by its domain plugin)
-- Identity proof: the `sis` block mapping of identity.md (student_id/college/school/major/admitted/status) is one-to-one with the connector identity; data source is the sis-cli transcript
+- Identity proof: the `sis` block mapping of identity.md (student_id/college/school/major/admitted/status) is one-to-one with the connector identity; data source is the cuhksz-cli sis transcript
 
 ## Invariants
 
@@ -24,6 +24,8 @@
 - Privacy red line: enrollment identity data is instance data and never enters the framework repository; identity.md is created in the instance library
 
 ## Changelog
+
+- 0.4 (2026-11-12) connector aggregation: bb-cli + sis-cli merged into the unified cuhksz-cli connector (bb/sis subcommands; legacy bb-cli/sis-cli entry points kept as thin wrappers); connector references updated, credential stores unchanged
 
 - 0.3 (2026-10-06) inject line compressed to pointer density (issue #12 layer discipline) (family roster duty added) — procedural detail lives in usage / PLUGIN.md / skills- 0.2 (2026-10-05) personal official documents materialized in-domain instead (cuhksz/sis/, owner ruling): the landing criterion fixed as 'when a domain has its own self-standing container, materialization lands in-domain; vault is the fallback for containerless domains'
 - 0.1 (2026-10-05) established: domain base; the bb family's five plugins attached and migrated in (wiki/bb/ → wiki/cuhksz/bb/, bb/ → cuhksz/bb/); sis/registry subdomains first established

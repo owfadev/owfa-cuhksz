@@ -1,10 +1,12 @@
-# bb-cli — CUHK-SZ Blackboard Read-Only CLI Connector
+# bb backend (cuhksz-cli bb) — CUHK-SZ Blackboard read-only connector
+
+> Per-backend deep reference of the unified `cuhksz-cli` connector (since 0.2.1; formerly the standalone `connectors/bb-cli` package). Entry points `cuhksz-cli bb ...` and the legacy `bb-cli ...` wrapper are equivalent.
 
 A command-line connector for `bb.cuhk.edu.cn` (Blackboard Learn Classic 3900.39): **a purely read-only data plane — no agent logic, no MCP, no monitoring** — serving as a fact interface for upper layers (wiki domain plugins / humans / scripts). The technical route follows bbwatch's empirical findings (curl_cffi fingerprint + ADFS OAuth2 + the official REST API); login details were rewritten from live reverse engineering on 2026-09-29.
 
 ## Installation
 
-Use the instance's declared Python environment when one exists. Otherwise, from `connectors/bb-cli`, choose one of these isolated environments; activation and global PATH changes are unnecessary.
+Use the instance's declared Python environment when one exists. Otherwise, from `connectors/cuhksz-cli` (the unified connector this doc belongs to), choose one of these isolated environments; activation and global PATH changes are unnecessary.
 
 Windows (PowerShell or Git Bash):
 

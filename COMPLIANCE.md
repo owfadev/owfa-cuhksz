@@ -19,6 +19,6 @@ Outer law layer: 《网络安全法》第27条 and《著作权法》— the camp
 2. Human pace only — no bulk sweeps, no site-wide crawls, no concurrent request engines; if a fetch storm is foreseeable, split it across sessions
 3. Personal study use for downloads — courseware and grades serve the owner's learning; do not bulk-reshare them (cloud drives, class-wide file dumps). Personal notes, the private wiki and in-conversation citation are fine
 4. No external data services built on pulled data — do not turn fetched content into an API or proxy others consume
-5. Relay, don't hoard personal data — sis fields stay in the identity page and conversation, per the sis-cli disclosure
+5. Relay, don't hoard personal data — sis fields stay in the identity page and conversation, per the cuhksz-cli disclosure
 
 Deliberately not provided: any write transaction (enroll/drop/swap, homework submission, announcements) — see the connector skills' scope sections.

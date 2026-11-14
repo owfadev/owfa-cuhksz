@@ -31,6 +31,8 @@
 
 ## Changelog
 
+- 0.9 (2026-11-12) connector aggregation follow-up: the skill's "fresh bbcli pull" reworded to "fresh cuhksz-cli bb pull"; no mechanism change
+
 - 0.8 (2026-10-07): audience register + map-first + source citation — explanations and grading default to the first/second-year undergraduate register (overridable via the language page's register key, same batch as language v0.4), step 0 ensures the course is fully mapped (same batch as bb v0.11), and each question/answer cites its source via the mapping's raw_path (same batch as bb-map v0.17) (PR #23, collapsed past master's 0.7 inject_tier entry)
 - 0.7 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 
