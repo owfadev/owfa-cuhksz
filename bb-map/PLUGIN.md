@@ -31,8 +31,10 @@
 
 ## Changelog
 
-- 0.21 2026-11-12: connector aggregation follow-up — the bbcli skill references in the command skill reworded to the unified cuhksz-cli (bb backend); command surface unchanged
-
+- 0.22 (2026-11-16): dead-path fix — the post-write pipeline references rewritten to the suite path `python .owfa/plugins/domains/personal/pipeline.py <index|tags|hot|log|verify>`; the commit-discipline vocabulary pointer now `.owfa/protocol/actions.md` (`.meta/` was removed from the framework on 2026-11-15)
+- 0.21 (2026-11-12): connector aggregation follow-up — the bbcli skill references in the command skill reworded to the unified cuhksz-cli (bb backend); command surface unchanged
+- 0.20 (2026-10-08): info.md gains `## Course Conventions` — course-intrinsic conventions (professor's notation, grading habits) that hold for any learner, kept distinct from bb-track's user.md `## Preferences` (user-specific); explanation-principles.md dissolved into the two homes (reconstructed from git history)
+- 0.19 (2026-10-08): knowledge-point granularity rule — one sm-N anchor per distinct concept, never lumped (new usage line + lumping warning check); map-first prerequisite gains the teaching-side unmapped-concept fallback (predict → read raw → propose mapping back); riding the bb-teach pedagogy batch (reconstructed from git history)
 - 0.17 (2026-10-07): map-first prerequisite + source citation — bb-map is the prerequisite for all course tasks (full-course mapping runs first; the mapping is their single basis), and raw_path + sm-N are the citation anchors for derived content, every generated claim traces back to its source (PR #23, collapsed past master's 0.16 inject_tier entry)
 - 0.16 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 

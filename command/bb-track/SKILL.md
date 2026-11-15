@@ -12,7 +12,7 @@ The bb domain's cognition hub — each course's user.md is the single profile of
 ## Scope
 
 Write: wiki/cuhksz/bb/<term>/<course>/user.md (reading convergence + evidence append, after user confirmation), log (one post-write line)
-Read: registry (`.meta/protocol/registry.yaml`, field anchor), courseware (full knowledge-point set for on-the-spot gap computation), assessments (retrospective/grade signals), notes/ (human note attributes + ai notes as weak evidence + testing/ exam grading), profile (domain-cognition registration, when present)
+Read: registry (`.owfa/protocol/registry.yaml`, field anchor), courseware (full knowledge-point set for on-the-spot gap computation), assessments (retrospective/grade signals), notes/ (human note attributes + ai notes as weak evidence + testing/ exam grading), profile (domain-cognition registration, when present)
 
 ## Steps
 
@@ -109,6 +109,6 @@ Output language takes the default key of the language declaration page `wiki/lan
 <!-- /usage:trust -->
 
 <!-- usage:log -->
-- Writing lines (mechanical, automatic): `python .meta/scripts/pipeline.py log <type> "<one sentence>" [--domain <domain>]` (type value set in the log block of the AGENTS injection region; domain tag = domain-plugin name such as bb/lark/vault, mandatory for in-domain transactions, omitted for framework and native transactions); rolling window and archiving are performed by the script
+- Writing lines (mechanical, automatic): `python .owfa/plugins/domains/personal/pipeline.py log <type> "<one sentence>" [--domain <domain>]` (type value set in the log block of the AGENTS injection region; domain tag = domain-plugin name such as bb/lark/vault, mandatory for in-domain transactions, omitted for framework and native transactions); rolling window and archiving are performed by the script
 <!-- /usage:log -->
 <!-- cmd-inject:end -->

@@ -1,5 +1,5 @@
 id: bb-track
-version: 0.10
+version: 0.11
 depends:
   - bb
   - bb-map
@@ -7,7 +7,7 @@ depends:
   - wiki
 commands:
   - bb-track
-updated: 2026-10-07
+updated: 2026-11-16
 attachment:
   - "wiki/cuhksz/bb/<term>/<course>/user.md — cognition profile (course root, outside the four buckets; two-region system: cognition readings converge-and-overwrite + evidence stream append-only)"
   - "cuhksz/bb/<term>/<course>/notes/ — study-notes zone (bb v0.7 coexistence: human notes + ai notes + testing/ papers; consumed by this plugin — human-note attributes, ai notes as weak evidence, paper grading as machine evidence)"
