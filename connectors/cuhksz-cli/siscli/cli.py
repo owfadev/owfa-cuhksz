@@ -25,14 +25,18 @@ def cmd_status(sis: Sis, args) -> int:
             session = "cached_unverified"
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         session = "unreadable"
+    accounts = config.accounts_view(sis.cfg)
+    default = config.default_account(sis.cfg)
     try:
         # Use the same resolver as re-login; never echo values or exception text.
         config.resolve_auto_credentials(sis.cfg)
         relogin = "credentials_available_unverified"
     except SystemExit:
-        relogin = "blocked_missing_credentials"
-    accounts = config.accounts_view(sis.cfg)
-    default = config.default_account(sis.cfg)
+        # Distinguish the two blocked failure modes (issue #9): missing
+        # credentials vs. credentials present but no default account picked.
+        relogin = ("blocked_no_default_account"
+                   if default is None and len(accounts) > 1
+                   else "blocked_missing_credentials")
     print(_fmt({"authenticated": None,
                 "authentication_checked": False,
                 "session": session,

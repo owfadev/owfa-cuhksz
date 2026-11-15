@@ -51,7 +51,7 @@ Dependencies are only `curl_cffi` (Chrome TLS fingerprint — the site rejects p
 
 | Command | Purpose |
 |---|---|
-| `whoami` / `status` / `terms` | Identity, session status, term list |
+| `whoami` / `status` / `terms` | Identity, offline tri-state session status (see Status contract below), term list |
 | `accounts` / `default [<name>]` | List stored accounts (passwords never shown) / show or set the default account — the only one auto-login ever uses |
 | `courses [--term substring]` | My courses (`--format text` prints one line per course) |
 | `tree <course> [--depth N] [--no-attachments]` | Content tree (folder/lesson/assignment, leaves carry attachment names) |
@@ -85,6 +85,18 @@ The course argument accepts: a course id (`_18030_1`), a course code, or a name 
 - Classic (JSP) courses only; Ultra courses unverified.
 - Write operations (submitting assignments / posting announcements) are deliberately not provided — upper layers needing them require explicit user instruction and separate design.
 - The login-failure page's error text lives permanently in HTML templates, so detection can only rely on state progression; if the school redesigns the login page, re-run with `BB_CLI_DEBUG=<dir>` to capture evidence.
+
+## Status contract (tri-state, offline)
+
+`status` is an offline diagnostic (issue #16): zero network requests, zero login attempts, no auto re-login. It separates the session **state** from the re-login **capability** instead of collapsing both into one `authenticated` boolean:
+
+- `session_file`: does `~/.bb-cli/session.json` exist.
+- `session_valid`: does that file contain a loadable cookie jar — **local evidence only** (the jar stores no expiry, and server validity is deliberately not checked). `true` means "cookie present", not "server-verified live".
+- `auto_relogin`: `"available"` when the default account has stored credentials (or the `BB_CLI_USERNAME`/`BB_CLI_PASSWORD` env fallback is set) — any real command re-logs in silently on 401; `"blocked (no stored credentials)"` when manual `bb-cli login` is required. This check reads config/env only, no network.
+- `user`: always `null` offline (kept for output-shape continuity).
+- `default_account` / `accounts`: which account automatic re-login would use; `default_account` is a local account label that may equal the student id (legacy configs name the account after the username).
+
+Reading it right: `session_valid=false, auto_relogin="available"` (expired session, credentials on disk) is **not** an error and not a manual-login condition — the next real command renews the session itself. Only `auto_relogin="blocked …"` calls for `login` (or `bb-cli default <name>` when multiple accounts are stored with no default).
 
 ## Acknowledgments
 

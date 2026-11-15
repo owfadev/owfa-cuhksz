@@ -208,26 +208,48 @@ def cmd_whoami(args):
     emit(c.me(), args.format)
 
 
+def _auto_relogin_state(cfg) -> str:
+    """Credential CAPABILITY for automatic re-login — config/env files only, zero network.
+    Mirrors config.resolve_auto_credentials's chain (default account → env fallback)
+    without its stderr noise or SystemExit."""
+    accounts = config.accounts_view(cfg)
+    name = config.default_account(cfg)
+    if name is not None:
+        acct = accounts[name]
+        if acct.get("username") and acct.get("password"):
+            return "available"
+    if os.environ.get(config.ENV_USERNAME) and os.environ.get(config.ENV_PASSWORD):
+        return "available"
+    return "blocked (no stored credentials)"
+
+
 def cmd_status(args):
-    c, t, cfg = build_client()
-    t._relogin = None  # status probing never triggers auto re-login; an unauthenticated state is reported as-is
+    # Offline tri-state probe (issue #16): zero network, zero login attempts.
+    # Session state (is a loadable cookie jar on disk?) is reported separately
+    # from capability (can any real command auto re-login with stored
+    # credentials?) — an expired session with credentials on disk is NOT a
+    # manual-login condition, and status must never imply one.
+    cfg = config.load_config()
     has_file = config.session_path().exists()
-    try:
-        me = c.me()
-        ok = True
-    except Exception:
-        me, ok = None, False
-    emit({"session_file": has_file, "authenticated": ok,
-          "user": (me or {}).get("name"), "default_account": config.default_account(cfg),
+    session_valid = False
+    if has_file:
+        try:  # local cookie liveness only (the jar carries no expiry); server validity is deliberately not checked
+            session_valid = Transport().load_session()
+        except Exception:
+            session_valid = False
+    relogin = _auto_relogin_state(cfg)
+    emit({"session_file": has_file, "session_valid": session_valid,
+          "auto_relogin": relogin, "user": None,
+          "default_account": config.default_account(cfg),
           "accounts": len(config.accounts_view(cfg))}, args.format,
          lambda o: [f"session_file={'yes' if o['session_file'] else 'no'}  "
-                    f"authenticated={'yes' if o['authenticated'] else 'no'}  "
-                    f"user={((o.get('user') or {}).get('given')) or '-'}  "
+                    f"session_valid={'yes' if o['session_valid'] else 'no'}  "
+                    f"auto_relogin={o['auto_relogin']}  "
                     f"default_account={o['default_account'] or '-'}  accounts={o['accounts']}"] +
-         (["!! no stored credentials for auto re-login — run `bb-cli login` (first login becomes the default account)"]
-          if o["accounts"] == 0 else
-          ["!! multiple accounts and no default set — auto-login refuses to pick; run `bb-cli default <name>`"]
-          if not o["default_account"] else []))
+         (["!! multiple accounts and no default set — auto-login refuses to pick; run `bb-cli default <name>`"]
+          if o["auto_relogin"].startswith("blocked") and not o["default_account"] and o["accounts"] > 1 else
+          ["!! no stored credentials for auto re-login — run `bb-cli login` (first login becomes the default account)"]
+          if o["auto_relogin"].startswith("blocked") else []))
 
 
 def cmd_terms(args):

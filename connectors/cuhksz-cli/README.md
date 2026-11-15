@@ -43,6 +43,8 @@ cuhksz-cli sis grades --term 'Term 2'
 
 Full command tables and reverse-engineering notes live in [docs/bb.md](docs/bb.md) and [docs/sis.md](docs/sis.md); agent-facing usage and login discipline in [SKILL.md](SKILL.md). Offline regression tests: `python -m unittest discover tests` (synthetic cookies only, no network).
 
+Both `status` commands are **offline tri-state probes** (zero network, zero login): bb reports `session_file` / `session_valid` (local cookie liveness) / `auto_relogin` (`available` | `blocked (no stored credentials)`); sis reports the same state/capability split as `session` / `relogin` plus unknown `reachable`. A stale session with re-login capability available is not an error — only `blocked` states need manual `login`. Full contracts: [docs/bb.md](docs/bb.md#status-contract-tri-state-offline), [docs/sis.md](docs/sis.md#status-contract-031).
+
 ## Layout
 
 - `cuhkszcli/` — dispatcher (entry layer, no logic of its own)

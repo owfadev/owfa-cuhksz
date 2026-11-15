@@ -61,7 +61,7 @@ Credentials and sessions live only in the local `~/.sis-cli/` (`SIS_CLI_HOME` ca
 
 | Command | Purpose |
 |---|---|
-| `status` | Session status and the list of available components |
+| `status` | Offline tri-state session/credential evidence (see Status contract below) + the list of available components |
 | `login` / `logout` | Interactive login (`--account <name>` stores under an account name; first login becomes the default; `--no-store` keeps credentials off disk) / logout and clear local state (stored passwords wiped, account names kept) |
 | `accounts` / `default [<name>]` | List stored accounts (passwords never shown) / show or set the default account — the only one auto-login ever uses |
 
@@ -100,7 +100,8 @@ Raw paths starting with `/` get rewritten by MSYS; prefix the command with `MSYS
 - `authenticated: null`, `authentication_checked: false`: authentication is unknown, including when cached cookies exist. This changes the old boolean field; consumers must not treat null as an authenticated state.
 - `session`: `cached_unverified` when a local token loads; `absent_or_unusable` when it does not; `unreadable` when a local error escapes the loader (for example, malformed cookie entries). The loader itself handles invalid JSON, unreadable bytes/files and empty/non-list jars by returning no usable session, so those cases report `absent_or_unusable`; `unreadable` is not a complete inventory of damaged files. An absent token does not say whether credentials could establish a new session.
 - `reachable: null`, `network_checked: false`: network reachability is unknown, never inferred from cached state or missing credentials.
-- `relogin`: `credentials_available_unverified` or `blocked_missing_credentials`, using the same resolver as normal re-login (including its environment-variable policy). No credentials or raw exception messages are emitted.
+- `relogin`: `credentials_available_unverified`, `blocked_missing_credentials`, or `blocked_no_default_account` (multiple accounts stored but no default picked — fix with `sis-cli default <name>` rather than re-entering credentials), using the same resolver as normal re-login (including its environment-variable policy). No credentials or raw exception messages are emitted.
+- `default_account` / `accounts`: which account automatic re-login would use. `default_account` is a local account label that may contain a student identifier (legacy configs name the account after the username) — documented disclosure; passwords and token values remain the non-disclosure line, and output stays on the local machine.
 - `components` lists supported commands, not verified server permissions. Exit 0 means the diagnostic completed.
 - A non-object JSON configuration is treated as empty, just like missing or invalid JSON; the original file is not rewritten. Constructing the client may create an empty local home directory, but status does not write configuration or session files.
 
@@ -109,3 +110,4 @@ A subsequent user-requested read may report a network failure (check campus netw
 ### Changelog
 
 - 0.3.1: replace optimistic status/silent-login behavior with explicit offline evidence, unknown authentication/reachability, and credential availability. Normal login and query behavior is unchanged.
+- 0.3.2 (issue #9 follow-up): split `blocked_missing_credentials` into `blocked_missing_credentials` vs. `blocked_no_default_account`; document the `default_account` label disclosure (may contain a student id). This closes the indistinguishable-failure-mode gap with bb-cli's tri-state contract (issue #16).
