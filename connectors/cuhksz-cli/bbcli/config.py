@@ -121,26 +121,67 @@ def store_account(cfg: dict, name: str, username: str, password: str | None, *, 
     return cfg
 
 
-def resolve_auto_credentials(cfg: dict) -> tuple[str, str]:
-    """Credentials for AUTOMATIC re-login (401-triggered) only — the default account,
-    exclusively. Chain: named default → implicit default (legacy flat / single stored
-    account) → env vars as a last-resort off-disk fallback. A non-default account is
-    never auto-logged-in."""
+class AutoLoginBlocked(SystemExit):
+    """Automatic re-login is blocked; `.state` carries the structured reason
+    ("missing_credentials" | "no_default_account"). Subclasses SystemExit so the
+    CLI surface (exit code + message) is unchanged for callers that don't care."""
+
+    def __init__(self, state: str, message: str):
+        super().__init__(message)
+        self.state = state
+
+
+_AUTO_LOGIN_HINTS = {
+    "missing_credentials":
+        "No credentials for automatic re-login (auto-login only ever uses the DEFAULT account): "
+        "run `bb-cli login --account <name>` interactively to store credentials, then "
+        "`bb-cli default <name>` — the first stored account becomes the default automatically",
+    "no_default_account":
+        "Multiple stored accounts and no default set — automatic re-login refuses to pick one: "
+        "run `bb-cli default <name>` to choose (credentials are already on disk)",
+}
+
+
+def auto_credentials_state(cfg: dict) -> tuple[str, tuple[str, str] | None]:
+    """Non-exiting probe of the AUTOMATIC re-login capability: same chain as
+    resolve_auto_credentials (default account → env fallback) but returns a
+    structured state instead of raising. Zero I/O beyond cfg/env, zero noise.
+
+    Returns (state, creds): state ∈ "available" | "missing_credentials" |
+    "no_default_account"; creds is the (username, password) pair when available,
+    else None. Credentials present but no default picked report
+    "no_default_account" (they exist on disk — that is not "missing")."""
     accounts = accounts_view(cfg)
     name = default_account(cfg)
     if name is not None:
         acct = accounts[name]
         if acct.get("username") and acct.get("password"):
-            return acct["username"], acct["password"]
+            return "available", (acct["username"], acct["password"])
     env_user = os.environ.get(ENV_USERNAME)
     env_pw = os.environ.get(ENV_PASSWORD)
     if env_user and env_pw:
-        print(f"no default-account credentials stored; falling back to {ENV_USERNAME}/{ENV_PASSWORD} env vars", file=sys.stderr)
-        return env_user, env_pw
-    raise SystemExit(
-        "No credentials for automatic re-login (auto-login only ever uses the DEFAULT account): "
-        "run `bb-cli login --account <name>` interactively to store credentials, then "
-        "`bb-cli default <name>` — the first stored account becomes the default automatically")
+        return "available", (env_user, env_pw)
+    if accounts and name is None:
+        return "no_default_account", None
+    return "missing_credentials", None
+
+
+def resolve_auto_credentials(cfg: dict) -> tuple[str, str]:
+    """Credentials for AUTOMATIC re-login (401-triggered) only — the default account,
+    exclusively. Chain: named default → implicit default (legacy flat / single stored
+    account) → env vars as a last-resort off-disk fallback. A non-default account is
+    never auto-logged-in. Thin wrapper over auto_credentials_state (the single
+    source of the resolution chain); blocked states raise AutoLoginBlocked with
+    the structured reason on `.state`."""
+    state, creds = auto_credentials_state(cfg)
+    if creds is not None:
+        username, password = creds
+        accounts = accounts_view(cfg)
+        name = default_account(cfg)
+        if name is None or not (accounts[name].get("username") and accounts[name].get("password")):
+            print(f"no default-account credentials stored; falling back to {ENV_USERNAME}/{ENV_PASSWORD} env vars", file=sys.stderr)
+        return username, password
+    raise AutoLoginBlocked(state, _AUTO_LOGIN_HINTS[state])
 
 
 def proxy() -> str | None:

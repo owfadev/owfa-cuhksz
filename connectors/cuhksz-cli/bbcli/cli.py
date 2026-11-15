@@ -208,19 +208,18 @@ def cmd_whoami(args):
     emit(c.me(), args.format)
 
 
-def _auto_relogin_state(cfg) -> str:
-    """Credential CAPABILITY for automatic re-login — config/env files only, zero network.
-    Mirrors config.resolve_auto_credentials's chain (default account → env fallback)
-    without its stderr noise or SystemExit."""
-    accounts = config.accounts_view(cfg)
-    name = config.default_account(cfg)
-    if name is not None:
-        acct = accounts[name]
-        if acct.get("username") and acct.get("password"):
-            return "available"
-    if os.environ.get(config.ENV_USERNAME) and os.environ.get(config.ENV_PASSWORD):
-        return "available"
-    return "blocked (no stored credentials)"
+_RELOGIN_DISPLAY = {
+    "available": "available",
+    "missing_credentials": "blocked (no stored credentials)",
+    "no_default_account": "blocked (no default account)",
+}
+
+_RELOGIN_HINTS = {
+    "missing_credentials":
+        "!! no stored credentials for auto re-login — run `bb-cli login` (first login becomes the default account)",
+    "no_default_account":
+        "!! multiple accounts and no default set — auto-login refuses to pick; run `bb-cli default <name>`",
+}
 
 
 def cmd_status(args):
@@ -237,7 +236,12 @@ def cmd_status(args):
             session_valid = Transport().load_session()
         except Exception:
             session_valid = False
-    relogin = _auto_relogin_state(cfg)
+    # Shared probe (same chain as config.resolve_auto_credentials — no parallel
+    # hand-rolled logic): the structured state drives both the displayed value
+    # and the text hint, so "credentials on disk but no default picked" reports
+    # no-default-account instead of masquerading as missing credentials.
+    state, _ = config.auto_credentials_state(cfg)
+    relogin = _RELOGIN_DISPLAY[state]
     emit({"session_file": has_file, "session_valid": session_valid,
           "auto_relogin": relogin, "user": None,
           "default_account": config.default_account(cfg),
@@ -245,11 +249,8 @@ def cmd_status(args):
          lambda o: [f"session_file={'yes' if o['session_file'] else 'no'}  "
                     f"session_valid={'yes' if o['session_valid'] else 'no'}  "
                     f"auto_relogin={o['auto_relogin']}  "
-                    f"default_account={o['default_account'] or '-'}  accounts={o['accounts']}"] +
-         (["!! multiple accounts and no default set — auto-login refuses to pick; run `bb-cli default <name>`"]
-          if o["auto_relogin"].startswith("blocked") and not o["default_account"] and o["accounts"] > 1 else
-          ["!! no stored credentials for auto re-login — run `bb-cli login` (first login becomes the default account)"]
-          if o["auto_relogin"].startswith("blocked") else []))
+                    f"default_account={o['default_account'] or '-'}  accounts={o['accounts']}"]
+                    + ([_RELOGIN_HINTS[state]] if state in _RELOGIN_HINTS else []))
 
 
 def cmd_terms(args):

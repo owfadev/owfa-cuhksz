@@ -270,9 +270,25 @@ class BBStatusTests(unittest.TestCase):
         data = self.run_bb_status(
             config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
                          b' "b": {"username": "ub", "password": "test-secret"}}}')
-        self.assertEqual(data["auto_relogin"], "blocked (no stored credentials)")
+        self.assertEqual(data["auto_relogin"], "blocked (no default account)")
         self.assertIsNone(data["default_account"])
         self.assertEqual(data["accounts"], 2)
+
+    def test_multiple_accounts_without_default_do_not_masquerade_as_missing(self):
+        # Credentials ARE on disk — the blocker is the unpicked default, so the
+        # "no stored credentials" wording must not appear anywhere.
+        data = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
+                         b' "b": {"username": "ub", "password": "test-secret"}}}')
+        self.assertEqual(data["auto_relogin"], "blocked (no default account)")
+
+    def test_text_format_no_default_hint_points_at_default_command(self):
+        text = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
+                         b' "b": {"username": "ub", "password": "test-secret"}}}', fmt="text")
+        self.assertIn("auto_relogin=blocked (no default account)", text)
+        self.assertIn("run `bb-cli default <name>`", text)
+        self.assertNotIn("no stored credentials", text)
 
     def test_text_format_uses_tri_state_and_hint(self):
         text = self.run_bb_status(fmt="text")

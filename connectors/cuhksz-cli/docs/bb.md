@@ -92,11 +92,15 @@ The course argument accepts: a course id (`_18030_1`), a course code, or a name 
 
 - `session_file`: does `~/.bb-cli/session.json` exist.
 - `session_valid`: does that file contain a loadable cookie jar — **local evidence only** (the jar stores no expiry, and server validity is deliberately not checked). `true` means "cookie present", not "server-verified live".
-- `auto_relogin`: `"available"` when the default account has stored credentials (or the `BB_CLI_USERNAME`/`BB_CLI_PASSWORD` env fallback is set) — any real command re-logs in silently on 401; `"blocked (no stored credentials)"` when manual `bb-cli login` is required. This check reads config/env only, no network.
+- `auto_relogin`: tri-state, aligned with sis-cli's two blocked reasons — `"available"` when the default account has stored credentials (or the `BB_CLI_USERNAME`/`BB_CLI_PASSWORD` env fallback is set) — any real command re-logs in silently on 401; `"blocked (no stored credentials)"` when manual `bb-cli login` is required; `"blocked (no default account)"` when credentials for several accounts are on disk but no default is picked (fix with `bb-cli default <name>`, not by re-entering credentials). This check reads config/env only, no network, and comes from the same probe as `resolve_auto_credentials` (`config.auto_credentials_state`) — no parallel hand-rolled chain.
 - `user`: always `null` offline (kept for output-shape continuity).
 - `default_account` / `accounts`: which account automatic re-login would use; `default_account` is a local account label that may equal the student id (legacy configs name the account after the username).
 
-Reading it right: `session_valid=false, auto_relogin="available"` (expired session, credentials on disk) is **not** an error and not a manual-login condition — the next real command renews the session itself. Only `auto_relogin="blocked …"` calls for `login` (or `bb-cli default <name>` when multiple accounts are stored with no default).
+Reading it right: `session_valid=false, auto_relogin="available"` (expired session, credentials on disk) is **not** an error and not a manual-login condition — the next real command renews the session itself. Only an `auto_relogin="blocked …"` value calls for action: `login` for `no stored credentials`, `bb-cli default <name>` for `no default account`.
+
+### Changelog
+
+- 0.2.2 (PR #17 review fixes, **breaking**): `status` no longer emits the `authenticated` boolean; consumers must read `session_file` / `session_valid` (local jar evidence) and the tri-state `auto_relogin` instead. The new "can this renew itself?" predicate is simply `auto_relogin == "available"`; `session_valid` only reflects the local cookie jar and never implies server-side validity. `auto_relogin` is now three-valued — the multi-account-no-default case reports `"blocked (no default account)`" (credentials exist on disk; fix with `bb-cli default <name>`) instead of the previous misleading `"blocked (no stored credentials)"`. Both blocked reasons mirror sis-cli's `blocked_missing_credentials` / `blocked_no_default_account`.
 
 ## Acknowledgments
 
