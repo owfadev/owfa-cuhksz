@@ -12,6 +12,13 @@ from unittest.mock import patch
 from curl_cffi import requests as creq
 from siscli import cli, config
 from siscli.transport import Transport
+from bbcli import cli as bbcli
+
+
+# Secrets that must never appear in status output. Account labels
+# (default_account) are documented as possibly containing a student id —
+# see docs/sis.md "Status contract": they are local-machine output only.
+FORBIDDEN_SECRETS = ("test-secret", "test-token")
 
 
 class StatusTests(unittest.TestCase):
@@ -32,7 +39,7 @@ class StatusTests(unittest.TestCase):
                 self.assertEqual(result, 0)
                 self.assertEqual(before, path.read_bytes() if path.exists() else None)
                 text = output.getvalue()
-                for secret in ("test-secret", "test-token", "test-user"):
+                for secret in FORBIDDEN_SECRETS:
                     self.assertNotIn(secret, text)
                 data = json.loads(text)
                 self.assertIsNone(data["authenticated"])
@@ -77,6 +84,35 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(data["session"], "unreadable")
         self.assertEqual(data["relogin"], "credentials_available_unverified")
 
+    def test_legacy_config_discloses_default_account_label(self):
+        # Documented contract: default_account is a local account label that may
+        # equal the student id (legacy configs name the account after the
+        # username); passwords/tokens remain the non-disclosure line.
+        data = self.run_status(cfg={"username": "test-user", "password": "test-secret"})
+        self.assertEqual(data["default_account"], "test-user")
+        self.assertEqual(data["accounts"], 1)
+
+    def test_multiple_accounts_without_default_block_with_specific_reason(self):
+        cfg = {"accounts": {"a": {"username": "test-user-a", "password": "test-secret"},
+                            "b": {"username": "test-user-b", "password": "test-secret"}}}
+        data = self.run_status(cfg=cfg)
+        self.assertEqual(data["relogin"], "blocked_no_default_account")
+        self.assertIsNone(data["default_account"])
+        self.assertEqual(data["accounts"], 2)
+
+    def test_multiple_accounts_with_default_can_relogin(self):
+        cfg = {"accounts": {"a": {"username": "test-user-a", "password": "test-secret"},
+                            "b": {"username": "test-user-b", "password": "test-secret"}},
+               "default_account": "b"}
+        data = self.run_status(cfg=cfg)
+        self.assertEqual(data["relogin"], "credentials_available_unverified")
+        self.assertEqual(data["default_account"], "b")
+
+    def test_default_account_without_password_still_blocks(self):
+        cfg = {"accounts": {"a": {"username": "test-user"}}, "default_account": "a"}
+        data = self.run_status(cfg=cfg)
+        self.assertEqual(data["relogin"], "blocked_missing_credentials")
+
 
 class StatusIntegrationTests(unittest.TestCase):
     """Exercise real Sis construction and config loading in a synthetic home."""
@@ -107,7 +143,7 @@ class StatusIntegrationTests(unittest.TestCase):
             login.assert_not_called()
             self.assertEqual(before, snapshot())
             text = output.getvalue() + errors.getvalue()
-            for secret in ("test-user", "test-secret", "test-token"):
+            for secret in FORBIDDEN_SECRETS:
                 self.assertNotIn(secret, text)
             self.assertEqual(errors.getvalue(), "")
             data = json.loads(output.getvalue())
@@ -148,6 +184,124 @@ class StatusIntegrationTests(unittest.TestCase):
         data = self.run_status(absent_home=True)
         self.assertEqual(data["session"], "absent_or_unusable")
         self.assertEqual(data["relogin"], "blocked_missing_credentials")
+
+
+class BBStatusTests(unittest.TestCase):
+    """bb-cli status tri-state contract (issue #16): offline evidence only —
+    session state (cookie jar on disk) vs. capability (stored credentials),
+    never triggering network or login."""
+
+    def run_bb_status(self, config_bytes=None, session_bytes=None, env=None, fmt="json"):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "synthetic-home"
+            home.mkdir()
+            for name, content in (("config.json", config_bytes), ("session.json", session_bytes)):
+                if content is not None:
+                    (home / name).write_bytes(content)
+
+            def snapshot():
+                return {str(p.relative_to(home)): p.read_bytes() for p in home.rglob("*") if p.is_file()}
+
+            before = snapshot()
+            environ = {"BB_CLI_HOME": str(home)}
+            environ.update(env or {})
+            with patch.dict(os.environ, environ, clear=True), \
+                    patch.object(creq.Session, "request",
+                                 side_effect=AssertionError("network forbidden")) as request, \
+                    patch("socket.socket.connect", side_effect=AssertionError("network forbidden")) as connect, \
+                    contextlib.redirect_stdout(io.StringIO()) as output, \
+                    contextlib.redirect_stderr(io.StringIO()) as errors:
+                bbcli.main(["status"] + (["--format", fmt] if fmt != "json" else []))
+            request.assert_not_called()
+            connect.assert_not_called()
+            self.assertEqual(before, snapshot())
+            self.assertEqual(errors.getvalue(), "")
+            text = output.getvalue()
+            for secret in FORBIDDEN_SECRETS:
+                self.assertNotIn(secret, text)
+            if fmt == "json":
+                return json.loads(text)
+            return text
+
+    def test_empty_home_reports_blocked_and_absent_session(self):
+        data = self.run_bb_status()
+        self.assertFalse(data["session_file"])
+        self.assertFalse(data["session_valid"])
+        self.assertEqual(data["auto_relogin"], "blocked (no stored credentials)")
+        self.assertIsNone(data["user"])
+        self.assertIsNone(data["default_account"])
+        self.assertEqual(data["accounts"], 0)
+
+    def test_stored_session_and_default_account_credentials(self):
+        data = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "test-user", "password": "test-secret"}},'
+                         b' "default_account": "a"}',
+            session_bytes=b'[{"name": "s_session_id", "value": "test-token", "domain": "bb.cuhk.edu.cn"}]')
+        self.assertTrue(data["session_file"])
+        self.assertTrue(data["session_valid"])
+        self.assertEqual(data["auto_relogin"], "available")
+        self.assertEqual(data["default_account"], "a")
+        self.assertEqual(data["accounts"], 1)
+
+    def test_expired_or_absent_session_with_credentials_is_not_a_login_condition(self):
+        # The issue #16 false-red: no live session, but credentials on disk mean
+        # any real command re-logs in silently — status must say "available".
+        data = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "test-user", "password": "test-secret"}}}')
+        self.assertFalse(data["session_file"])
+        self.assertFalse(data["session_valid"])
+        self.assertEqual(data["auto_relogin"], "available")
+
+    def test_corrupt_session_file_is_not_valid(self):
+        data = self.run_bb_status(session_bytes=b'{"not": "a jar"]')
+        self.assertTrue(data["session_file"])
+        self.assertFalse(data["session_valid"])
+
+    def test_legacy_flat_config_supports_relogin(self):
+        data = self.run_bb_status(config_bytes=b'{"username": "test-user", "password": "test-secret"}')
+        self.assertEqual(data["auto_relogin"], "available")
+        self.assertEqual(data["default_account"], "test-user")
+
+    def test_env_credentials_count_as_capability(self):
+        data = self.run_bb_status(env={"BB_CLI_USERNAME": "test-user", "BB_CLI_PASSWORD": "test-secret"})
+        self.assertEqual(data["auto_relogin"], "available")
+
+    def test_multiple_accounts_without_default_block_relogin(self):
+        data = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
+                         b' "b": {"username": "ub", "password": "test-secret"}}}')
+        self.assertEqual(data["auto_relogin"], "blocked (no default account)")
+        self.assertIsNone(data["default_account"])
+        self.assertEqual(data["accounts"], 2)
+
+    def test_multiple_accounts_without_default_do_not_masquerade_as_missing(self):
+        # Credentials ARE on disk — the blocker is the unpicked default, so the
+        # "no stored credentials" wording must not appear anywhere.
+        data = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
+                         b' "b": {"username": "ub", "password": "test-secret"}}}')
+        self.assertEqual(data["auto_relogin"], "blocked (no default account)")
+
+    def test_text_format_no_default_hint_points_at_default_command(self):
+        text = self.run_bb_status(
+            config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
+                         b' "b": {"username": "ub", "password": "test-secret"}}}', fmt="text")
+        self.assertIn("auto_relogin=blocked (no default account)", text)
+        self.assertIn("run `bb-cli default <name>`", text)
+        self.assertNotIn("no stored credentials", text)
+
+    def test_text_format_uses_tri_state_and_hint(self):
+        text = self.run_bb_status(fmt="text")
+        self.assertIn("auto_relogin=blocked (no stored credentials)", text)
+        self.assertIn("session_valid=no", text)
+        self.assertIn("run `bb-cli login`", text)
+        self.assertNotIn("authenticated=", text)
+
+    def test_text_format_no_hint_when_relogin_available(self):
+        text = self.run_bb_status(
+            config_bytes=b'{"username": "test-user", "password": "test-secret"}', fmt="text")
+        self.assertIn("auto_relogin=available", text)
+        self.assertNotIn("!!", text)
 
 
 if __name__ == "__main__":

@@ -25,14 +25,15 @@ def cmd_status(sis: Sis, args) -> int:
             session = "cached_unverified"
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         session = "unreadable"
-    try:
-        # Use the same resolver as re-login; never echo values or exception text.
-        config.resolve_auto_credentials(sis.cfg)
-        relogin = "credentials_available_unverified"
-    except SystemExit:
-        relogin = "blocked_missing_credentials"
-    accounts = config.accounts_view(sis.cfg)
+    # Structured state comes straight from the shared resolver-side probe
+    # (config.auto_credentials_state) — no SystemExit heuristic re-derivation
+    # here; never echo values or exception text.
+    state, _ = config.auto_credentials_state(sis.cfg)
+    relogin = {"available": "credentials_available_unverified",
+               "missing_credentials": "blocked_missing_credentials",
+               "no_default_account": "blocked_no_default_account"}[state]
     default = config.default_account(sis.cfg)
+    accounts = len(config.accounts_view(sis.cfg))
     print(_fmt({"authenticated": None,
                 "authentication_checked": False,
                 "session": session,
@@ -40,7 +41,7 @@ def cmd_status(sis: Sis, args) -> int:
                 "network_checked": False,
                 "relogin": relogin,
                 "default_account": default,
-                "accounts": len(accounts),
+                "accounts": accounts,
                 "host": "sis.cuhk.edu.cn",
                 "components": sorted(config.COMPONENTS)}))
     return 0
