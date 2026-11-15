@@ -31,6 +31,7 @@
 
 ## Changelog
 
+- 0.10 (2026-11-16): dead-path fix — the post-write pipeline references rewritten to the suite path `python .owfa/plugins/domains/personal/pipeline.py <index|tags|hot|log|verify>`, the registry pointer now `.owfa/protocol/registry.yaml` (`.meta/` was removed from the framework on 2026-11-15)
 - 0.9 (2026-11-12) connector aggregation follow-up: the skill's "fresh bbcli pull" reworded to "fresh cuhksz-cli bb pull"; no mechanism change
 
 - 0.8 (2026-10-07): audience register + map-first + source citation — explanations and grading default to the first/second-year undergraduate register (overridable via the language page's register key, same batch as language v0.4), step 0 ensures the course is fully mapped (same batch as bb v0.11), and each question/answer cites its source via the mapping's raw_path (same batch as bb-map v0.17) (PR #23, collapsed past master's 0.7 inject_tier entry)

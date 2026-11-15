@@ -1,5 +1,5 @@
 id: bb-teach
-version: 0.17
+version: 0.18
 depends:
   - bb-track
   - bb-map
@@ -7,7 +7,7 @@ commands:
   - bb-teach
 usage_routes:
   - bb-track
-updated: 2026-10-20
+updated: 2026-11-16
 attachment:
   - "cuhksz/bb/<term>/<course>/notes/ — explanation deposits land here (ai notes: one per question, origin: ai, append-only never overwritten; bb v0.7 coexistence zone, weak evidence for bb-track)"
   - "wiki/cuhksz/bb/<term>/<course>/user.md — cognition profile (bb-track's own; this plugin read-only consumes readings/evidence/goals + the computed views, write-back via the bb-track contract)"

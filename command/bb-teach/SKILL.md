@@ -12,7 +12,7 @@ When the user asks, first read the bb-track cognition profile to know "whether t
 ## Scope
 
 Write: notes/ ai notes (for significant Q&A, origin: ai, one question per note, append-only), log (one line when a note lands); user.md cognition convergence (via the bb-track write contract, after user confirmation)
-Read: registry (`.meta/protocol/registry.yaml`, field anchor), query retrieval (hot/index/tags/grep), courseware / assessments (bb-map pages, sm-N/req-N anchors), user.md (bb-track cognition profile + computed views)
+Read: registry (`.owfa/protocol/registry.yaml`, field anchor), query retrieval (hot/index/tags/grep), courseware / assessments (bb-map pages, sm-N/req-N anchors), user.md (bb-track cognition profile + computed views)
 
 ## Steps
 

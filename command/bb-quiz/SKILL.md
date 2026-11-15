@@ -12,7 +12,7 @@ The user specifies a scope (+ optional samples); reading the bb-track cognition 
 ## Scope
 
 Write: cuhksz/bb/<term>/<course>/notes/testing/ (`<name>-questions.md` + `-answers.md` + appended `## Grading`, origin: ai, append-only), log (one post-write line); user.md grading write-back (via the bb-track write contract, after user confirmation)
-Read: registry (`.meta/protocol/registry.yaml`, field anchor), courseware (sm-N + terminology), assessments (known assignments), user.md (bb-track cognition profile), notes/ ai notes (best-effort)
+Read: registry (`.owfa/protocol/registry.yaml`, field anchor), courseware (sm-N + terminology), assessments (known assignments), user.md (bb-track cognition profile), notes/ ai notes (best-effort)
 
 ## Steps
 
@@ -72,7 +72,7 @@ Question-stem language follows the source — samples → known assignments → 
 - stale handling: assessments results and info basic information carry stale_after; when stale, refresh via a fresh cuhksz-cli bb pull (the agent is the synchronizer); courseware/attachments are purely local reconciliation, no TTL
 - Map-first prerequisite: bb-map is the prerequisite for all course tasks (teaching/quiz/review/Q&A) — run full-course mapping before any of them; the mapping is their single basis (sm-N/info/assessments), never raw source or ad-hoc reading — except the teaching-side unmapped-concept fallback (predict location → read raw → parse → propose mapping the concept back as a new sm-N, emergence-based)
 - Source citation: raw_path + sm-N are the citation anchors — derived content (notes/reviews/answers) cites its source (courseware/textbook) through them
-- Post-write pipeline (mechanical, automatic): python .meta/scripts/pipeline.py index + tags + hot + log + verify (rebuild the derived layer first, then validate — validation closes at the end, avoiding premature false drift reports from the derived zones)
+- Post-write pipeline (mechanical, automatic): python .owfa/plugins/domains/personal/pipeline.py index + tags + hot + log + verify (rebuild the derived layer first, then validate — validation closes at the end, avoiding premature false drift reports from the derived zones)
 - Derivation out-only: action items → todo, high-value reviews → notes (backlinks to assessments pages) — the todo/notes bridges
 <!-- /usage:bb-map -->
 
@@ -99,6 +99,6 @@ Question-stem language follows the source — samples → known assignments → 
 <!-- /usage:trust -->
 
 <!-- usage:log -->
-- Writing lines (mechanical, automatic): `python .meta/scripts/pipeline.py log <type> "<one sentence>" [--domain <domain>]` (type value set in the log block of the AGENTS injection region; domain tag = domain-plugin name such as bb/lark/vault, mandatory for in-domain transactions, omitted for framework and native transactions); rolling window and archiving are performed by the script
+- Writing lines (mechanical, automatic): `python .owfa/plugins/domains/personal/pipeline.py log <type> "<one sentence>" [--domain <domain>]` (type value set in the log block of the AGENTS injection region; domain tag = domain-plugin name such as bb/lark/vault, mandatory for in-domain transactions, omitted for framework and native transactions); rolling window and archiving are performed by the script
 <!-- /usage:log -->
 <!-- cmd-inject:end -->

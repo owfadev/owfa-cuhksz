@@ -11,4 +11,4 @@ Course operations on autopilot for CUHK-SZ students: courseware, deadlines, anno
 - Read-only connectors; credentials stay local; enrollment data never enters any repository
 
 
-vault-wiki domain package **cuhksz** — see [PKG.yaml](PKG.yaml) for members/connectors/compat; mechanism in the [framework](https://github.com/owfadev/owfa) (.meta/docs/packages.md).
+vault-wiki domain package **cuhksz** — see [PKG.yaml](PKG.yaml) for members/connectors/compat; mechanism in the [framework](https://github.com/owfadev/owfa) (.owfa/docs/packages.md).
