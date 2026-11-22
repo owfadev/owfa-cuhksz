@@ -60,13 +60,18 @@ def _home_status(args) -> int:
     if args.format == "text":
         print(f"connector: {data['connector']}")
         print(f"helper:    {data['helper'] or '(none — legacy fallback)'}")
+        if data["helper_problem"]:
+            print(f"           {data['helper_problem']}")
         for component, row in data["components"].items():
-            print(f"{component}: {row['path']} ({row['source']})")
+            print(f"{component}: {row['state_dir']} ({row['source']})")
+            if row["override_value"]:
+                print(f"   explicit override {row['override_env']}={row['override_value']}")
             if row["legacy_present"]:
-                print(f"   legacy {row['legacy_path']} is still present"
-                      + (" (already migrated: symlink)" if row["legacy_is_symlink"] else ""))
+                print(f"   legacy {row['legacy_home']} is still present"
+                      + (" (already migrated: symlink)" if row["legacy_is_symlink"] else
+                         "" if not row["legacy_has_state"] else " and holds state — migrate it"))
         substrate = data.get("substrate")
-        if substrate:
+        if substrate and "home" in substrate:
             print(f"home:      {substrate['home']}")
             print(f"components on disk: {', '.join(substrate['components']) or '(none)'}")
             for key in ("exclusivity_violations", "stale_bindings"):
@@ -78,12 +83,22 @@ def _home_status(args) -> int:
 
 
 def _home_migrate(args) -> int:
-    data = home.migrate(dry_run=args.dry_run, root=args.root)
+    try:
+        data = home.migrate(dry_run=args.dry_run, root=args.root)
+    except home.MigrationError as exc:
+        # Structured error on stdout (a stable contract even for text mode), human line on stderr.
+        print(json.dumps(exc.detail, ensure_ascii=False, indent=2))
+        print(f"cuhksz-cli home migrate: {exc}", file=sys.stderr)
+        return 1
     if args.format == "text":
         if args.dry_run:
             print("dry run — nothing was moved and no binding was registered")
-        for component, row in data["components"].items():
-            print(f"{component}: {row['action']}")
+        elif data.get("already_migrated"):
+            print("already migrated — nothing was moved")
+        else:
+            print(f"migrated: {', '.join(data.get('migrated') or []) or '(none)'}")
+        for row in data["components"]:
+            print(f"{row['component']}: {row['action']}")
             print(f"   legacy: {row['legacy']}")
             print(f"   target: {row['target']}")
             if row.get("binding_id"):

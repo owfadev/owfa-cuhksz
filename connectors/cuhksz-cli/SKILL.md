@@ -1,7 +1,7 @@
 ---
 name: cuhksz-cli
 owner: framework
-description: "Read-only access to the CUHK-SZ school systems via the unified connectors/cuhksz-cli CLI: `cuhksz-cli bb <...>` reads bb.cuhk.edu.cn (Blackboard — courses/assignments/grades/announcements/course files/my submissions) and `cuhksz-cli sis <...>` reads sis.cuhk.edu.cn (PeopleSoft — schedule/grades/history/enrollment dates/exams/transcript). Single entry point; machine state lives in the OWFA substrate (`cuhksz-cli home status`). Query-and-answer only; writes nothing to wiki. Triggers on: cuhksz-cli, cuhksz, bb, blackboard, bb.cuhk.edu.cn, sis, sis.cuhk.edu.cn, fetch from bb, check bb courses, check bb assignments, check bb grades, check bb announcements, check sis schedule, check my timetable, check enrollment dates, student information system, timetable query, 学生信息系统, 课表查询."
+description: "Read-only access to the CUHK-SZ school systems via the unified connectors/cuhksz-cli CLI: `cuhksz-cli bb <...>` reads bb.cuhk.edu.cn (Blackboard — courses/assignments/grades/announcements/course files/my submissions) and `cuhksz-cli sis <...>` reads sis.cuhk.edu.cn (PeopleSoft — schedule/grades/history/enrollment dates/exams/transcript). Single entry point; machine state lives in the OWFA substrate (`cuhksz-cli home status`). Query-and-answer only; writes nothing to wiki. Triggers on: cuhksz-cli, cuhksz, bb-cli, sis-cli, bb, blackboard, bb.cuhk.edu.cn, sis, sis.cuhk.edu.cn, fetch from bb, check bb courses, check bb assignments, check bb grades, check bb announcements, check sis schedule, check my timetable, check enrollment dates, student information system, timetable query, 学生信息系统, 课表查询."
 ---
 
 # cuhksz-cli: Unified CUHK-SZ Read-Only Connector
@@ -36,7 +36,7 @@ cuhksz-cli home migrate --dry-run
 cuhksz-cli home migrate
 ```
 
-`home migrate` moves `~/.bb-cli` → `<home>/bb` and `~/.sis-cli` → `<home>/sis`. It must run inside the workspace whose binding should own the state (or pass `--root <workspace>`); run it once, then re-login is not needed — stored credentials and sessions carry over. `--dry-run` moves nothing and registers no binding. If the connector runs with no OWFA helper at all (installed outside any workspace), it keeps using the legacy directories and prints a one-line notice naming this command.
+`home migrate` moves `~/.bb-cli` → `<home>/bb` and `~/.sis-cli` → `<home>/sis`. It must run inside the workspace whose binding should own the state (or pass `--root <workspace>`); run it once, then re-login is not needed — stored credentials and sessions carry over. `--dry-run` moves nothing and registers no binding. Before moving anything the command pre-flights every component: if `BB_CLI_HOME` or `SIS_CLI_HOME` is set the whole migration is refused (an explicit override is honoured exactly — unset it first), as is a target component that already holds files; the refusal is a structured JSON error and nothing moves or binds. If the connector runs with no OWFA helper at all (installed outside any workspace), or if the substrate component does not hold state yet while the legacy directory still does, it keeps using the legacy directory and prints a one-line notice naming this command — an unmigrated home is never silently stranded behind a new empty one.
 
 The `BB_CLI_HOME` / `SIS_CLI_HOME` environment variables remain honoured as explicit compatibility overrides ("use exactly this directory") and are not the default path. The `BB_CLI_*` / `SIS_CLI_*` credential, proxy and debug variables are unchanged.
 

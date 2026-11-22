@@ -38,7 +38,8 @@ def verify(ctx):
     if not os.path.exists(idp):
         issues.append(("error", "wiki/cuhksz/identity.md missing — create it per the identity constitution (sis block from transcript)"))
     else:
-        text = open(idp, encoding="utf-8").read()
+        with open(idp, encoding="utf-8") as handle:
+            text = handle.read()
         if not re.search(r"^type:\s*cuhksz\s*$", text, re.M):
             issues.append(("error", "identity.md missing `type: cuhksz`"))
         if "student_id" not in text:
