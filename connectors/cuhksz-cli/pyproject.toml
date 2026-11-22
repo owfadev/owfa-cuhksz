@@ -1,6 +1,6 @@
 [project]
 name = "cuhkszcli"
-version = "0.2.1"
+version = "0.3.0"
 description = "CUHK-SZ unified read-only CLI connector (bb.cuhk.edu.cn Blackboard + sis.cuhk.edu.cn PeopleSoft SIS)"
 requires-python = ">=3.10"
 dependencies = [
@@ -9,10 +9,9 @@ dependencies = [
 ]
 
 [project.scripts]
+# single entry since 0.3.0 — legacy bb-cli / sis-cli console scripts were removed;
+# use `cuhksz-cli bb ...` / `cuhksz-cli sis ...`
 cuhksz-cli = "cuhkszcli.cli:main"
-# backward-compat thin wrappers: identical behavior to `cuhksz-cli bb|sis ...`
-bb-cli = "bbcli.cli:main"
-sis-cli = "siscli.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

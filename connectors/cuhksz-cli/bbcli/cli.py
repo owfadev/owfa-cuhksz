@@ -95,11 +95,11 @@ def need_auth(client: BBClient):
     try:
         client.me()
     except auth.CredentialError as e:
-        print(f"Stored credentials rejected ({e}); run `bb-cli login` again", file=sys.stderr)
+        print(f"Stored credentials rejected ({e}); run `cuhksz-cli bb login` again", file=sys.stderr)
         sys.exit(2)
     except ApiError as e:
         if e.status == 401:
-            print("Not logged in or session expired: run `bb-cli login` first", file=sys.stderr)
+            print("Not logged in or session expired: run `cuhksz-cli bb login` first", file=sys.stderr)
         else:
             print(f"Auth check failed: {e}", file=sys.stderr)
         sys.exit(2)
@@ -148,7 +148,7 @@ def cmd_login(args):
     d = config.default_account(cfg)
     note = (f"account '{name}' is now the default — automatic re-login will use this account only"
             if d == name else
-            f"note: default account is '{d}' — automatic re-login uses that one; switch with `bb-cli default {name}`")
+            f"note: default account is '{d}' — automatic re-login uses that one; switch with `cuhksz-cli bb default {name}`")
     emit({"login": "ok", "user": me.get("name"), "id": me.get("id"),
           "account": name, "default_account": d, "note": note}, args.format,
           lambda o: [f"login ok  user={((o.get('user') or {}).get('given')) or o.get('user')}  "
@@ -160,12 +160,12 @@ def cmd_accounts(args):
     rows = config.list_accounts(cfg)
     d = config.default_account(cfg)
     hint = None if len(rows) <= 1 or d else \
-        "multiple accounts and no default set: automatic re-login refuses to pick — run `bb-cli default <name>`"
+        "multiple accounts and no default set: automatic re-login refuses to pick — run `cuhksz-cli bb default <name>`"
     emit({"accounts": rows, "default_account": d, "hint": hint}, args.format,
           lambda o: [f"{'*' if r['default'] else ' '} {r['name']}  {r['username']}  "
                      f"{'password stored' if r['has_password'] else 'no password stored'}"
                      for r in o["accounts"]] + (["!! " + o["hint"]] if o.get("hint") else [])
-          or ["(no accounts — run `bb-cli login`)"])
+          or ["(no accounts — run `cuhksz-cli bb login`)"])
 
 
 def cmd_default(args):
@@ -180,7 +180,7 @@ def cmd_default(args):
     accounts = config.accounts_view(cfg)
     if args.name not in accounts:
         sys.exit(f"Unknown account '{args.name}'; known: {', '.join(sorted(accounts)) or '(none)'}"
-                 f" — create one with `bb-cli login --account {args.name}`")
+                 f" — create one with `cuhksz-cli bb login --account {args.name}`")
     config.store_account(cfg, args.name, accounts[args.name]["username"],
                          accounts[args.name].get("password"), make_default=True)
     config.save_config(cfg)
@@ -198,7 +198,7 @@ def cmd_logout(args):
     t.load_session()
     auth.logout(t)
     n = len(config.accounts_view(config.load_config()))
-    extra = f" ({n} stored account(s) kept — manage with `bb-cli accounts`)" if n else ""
+    extra = f" ({n} stored account(s) kept — manage with `cuhksz-cli bb accounts`)" if n else ""
     print(f"Logged out; local session cleared{extra}")
 
 
@@ -216,9 +216,9 @@ _RELOGIN_DISPLAY = {
 
 _RELOGIN_HINTS = {
     "missing_credentials":
-        "!! no stored credentials for auto re-login — run `bb-cli login` (first login becomes the default account)",
+        "!! no stored credentials for auto re-login — run `cuhksz-cli bb login` (first login becomes the default account)",
     "no_default_account":
-        "!! multiple accounts and no default set — auto-login refuses to pick; run `bb-cli default <name>`",
+        "!! multiple accounts and no default set — auto-login refuses to pick; run `cuhksz-cli bb default <name>`",
 }
 
 
@@ -612,7 +612,7 @@ def cmd_raw(args):
 
 # ---- Argument parsing ----
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="bb-cli", description="CUHK-SZ Blackboard read-only CLI connector")
+    p = argparse.ArgumentParser(prog="cuhksz-cli bb", description="CUHK-SZ Blackboard read-only CLI connector")
     p.add_argument("--version", action="version", version=__version__)
     p.add_argument("--format", choices=["json", "text"], default="json")
     common = argparse.ArgumentParser(add_help=False)  # lets --format be accepted after the subcommand too

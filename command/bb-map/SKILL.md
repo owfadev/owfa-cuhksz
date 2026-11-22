@@ -7,7 +7,7 @@ description: "Map bb/ fetched artifacts and gradebook snapshots into wiki/cuhksz
 
 # bb-map: course-domain mapping
 
-Map `cuhksz/bb/` fetched artifacts and gradebook snapshots into `wiki/cuhksz/bb/<term>/<course>/` canonical four-bucket pages — mapping and understanding are decoupled: registration + courseware knowledge-point summaries (coarse-grained distillation) + reconciliation actions (the four-bucket contract and reconciliation fields are in the bb-map block of the injection region). Data fetching goes through the cuhksz-cli skill (`connectors/cuhksz-cli/SKILL.md` — session discipline and command quick reference; the legacy `bb-cli` wrapper remains equivalent); in-depth teaching is not part of this command (high-value retrospectives go through save into notes, backlinking the territory page).
+Map `cuhksz/bb/` fetched artifacts and gradebook snapshots into `wiki/cuhksz/bb/<term>/<course>/` canonical four-bucket pages — mapping and understanding are decoupled: registration + courseware knowledge-point summaries (coarse-grained distillation) + reconciliation actions (the four-bucket contract and reconciliation fields are in the bb-map block of the injection region). Data fetching goes through the cuhksz-cli skill (`connectors/cuhksz-cli/SKILL.md` — session discipline and command quick reference; single entry `cuhksz-cli bb ...`); in-depth teaching is not part of this command (high-value retrospectives go through save into notes, backlinking the territory page).
 
 ## Scope
 

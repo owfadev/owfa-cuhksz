@@ -40,7 +40,7 @@ class Sis:
         info["note"] = (f"account '{name}' is now the default — automatic re-login will use this account only"
                         if d == name else
                         f"note: default account is '{d}' — automatic re-login uses that one; "
-                        f"switch with `sis-cli default {name}`")
+                        f"switch with `cuhksz-cli sis default {name}`")
         return info
 
     def logout(self) -> None:

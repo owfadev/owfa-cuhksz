@@ -1,10 +1,13 @@
 """Configuration and paths: every tunable lives here.
 
-Credentials/sessions live only in the user directory (default ~/.bb-cli,
-BB_CLI_HOME overrides); never written into the working directory or any
-repository. Environment variables take precedence over the config file
-(for the explicit `login` command; automatic re-login uses the default
-account only — see resolve_auto_credentials).
+Credentials/sessions live only on the local machine, in the cuhksz-cli
+substrate home `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/bb/`
+(`BB_CLI_HOME` stays as an explicit compatibility override, and a machine with
+no OWFA helper falls back to the legacy `~/.bb-cli` with a loud notice); never
+written into the working directory or any repository. Environment variables
+take precedence over the config file (for the explicit `login` command;
+automatic re-login uses the default account only — see
+resolve_auto_credentials).
 """
 
 from __future__ import annotations
@@ -14,6 +17,8 @@ import os
 import stat
 import sys
 from pathlib import Path
+
+from cuhkszcli import home as connector_home
 
 BB_HOST = "https://bb.cuhk.edu.cn"
 ADFS_CLIENT_ID = "4b71b947-7b0d-4611-b47e-0ec37aabfd5e"
@@ -27,7 +32,7 @@ ADFS_AUTHORIZE_URL = (
 IMPERSONATE = "chrome124"  # the site does TLS client fingerprinting; plain OpenSSL handshakes get rejected
 REQUEST_TIMEOUT = 30
 
-ENV_HOME = "BB_CLI_HOME"
+ENV_HOME = connector_home.ENV_OVERRIDES["bb"]  # compatibility override; the default is the substrate home
 ENV_USERNAME = "BB_CLI_USERNAME"
 ENV_PASSWORD = "BB_CLI_PASSWORD"
 ENV_PROXY = "BB_CLI_PROXY"
@@ -35,10 +40,8 @@ ENV_DEBUG = "BB_CLI_DEBUG"  # set to a directory path to dump debug HTML
 
 
 def bb_home() -> Path:
-    root = os.environ.get(ENV_HOME)
-    home = Path(root).expanduser() if root else Path.home() / ".bb-cli"
-    home.mkdir(parents=True, exist_ok=True)
-    return home
+    # explicit BB_CLI_HOME > substrate component_dir > legacy ~/.bb-cli (loud)
+    return connector_home.resolve_component("bb")["path"]
 
 
 def config_path() -> Path:
@@ -134,11 +137,11 @@ class AutoLoginBlocked(SystemExit):
 _AUTO_LOGIN_HINTS = {
     "missing_credentials":
         "No credentials for automatic re-login (auto-login only ever uses the DEFAULT account): "
-        "run `bb-cli login --account <name>` interactively to store credentials, then "
-        "`bb-cli default <name>` — the first stored account becomes the default automatically",
+        "run `cuhksz-cli bb login --account <name>` interactively to store credentials, then "
+        "`cuhksz-cli bb default <name>` — the first stored account becomes the default automatically",
     "no_default_account":
         "Multiple stored accounts and no default set — automatic re-login refuses to pick one: "
-        "run `bb-cli default <name>` to choose (credentials are already on disk)",
+        "run `cuhksz-cli bb default <name>` to choose (credentials are already on disk)",
 }
 
 

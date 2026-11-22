@@ -4,10 +4,10 @@ Layering: config (paths and settings) / transport (curl_cffi session and TLS
 fingerprint) / auth (ADFS OAuth2 login) / api (Learn REST wrappers) / cli
 (command surface).
 Discipline: read-only — never issues any write request; credentials and
-sessions live only in the user directory (~/.bb-cli/, unchanged), never in
-any repository.
+sessions live only in the machine substrate
+($OWFA_HOME/connectors/cuhksz-cli/homes/<id>/bb/), never in any repository.
 Since cuhksz-cli 0.2.1 this module ships in the `cuhkszcli` distribution;
-the standalone `bb-cli` entry point remains as a thin wrapper.
+the legacy `bb-cli` entry point was removed in 0.3.0.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"

@@ -79,7 +79,7 @@ class BBClient:
         if len(hits) == 1:
             return hits[0]
         if not hits:
-            raise SystemExit(f"No course matched: {arg} (run `bb-cli courses` to see the list)")
+            raise SystemExit(f"No course matched: {arg} (run `cuhksz-cli bb courses` to see the list)")
         raise SystemExit("Ambiguous course match; use a longer substring or the course id:\n" + "\n".join(
             f"  {c['id']}  {c.get('name')}" for c in hits
         ))

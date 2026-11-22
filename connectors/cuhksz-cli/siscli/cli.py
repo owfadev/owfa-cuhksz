@@ -1,4 +1,4 @@
-"""sis-cli command surface: all read-only. Write operations (enroll/drop/submit-type actions) are deliberately not provided.
+"""sis command surface (`cuhksz-cli sis`): all read-only. Write operations (enroll/drop/submit-type actions) are deliberately not provided.
 """
 
 from __future__ import annotations
@@ -77,13 +77,13 @@ def cmd_accounts(sis: Sis, args) -> int:
     d = config.default_account(sis.cfg)
     out = {"accounts": rows, "default_account": d}
     if len(rows) > 1 and not d:
-        out["hint"] = "multiple accounts and no default set: automatic re-login refuses to pick — run `sis-cli default <name>`"
+        out["hint"] = "multiple accounts and no default set: automatic re-login refuses to pick — run `cuhksz-cli sis default <name>`"
     print(_fmt(out))
     for r in rows:
         print(f"{'*' if r['default'] else ' '} {r['name']}  {r['username']}  "
               f"{'password stored' if r['has_password'] else 'no password stored'}")
     if not rows:
-        print("(no accounts — run `sis-cli login`)")
+        print("(no accounts — run `cuhksz-cli sis login`)")
     if out.get("hint"):
         print(f"!! {out['hint']}", file=sys.stderr)
     return 0
@@ -98,7 +98,7 @@ def cmd_default(sis: Sis, args) -> int:
     accounts = config.accounts_view(sis.cfg)
     if args.name not in accounts:
         print(f"Unknown account '{args.name}'; known: {', '.join(sorted(accounts)) or '(none)'} "
-              f"— create one with `sis-cli login --account {args.name}`", file=sys.stderr)
+              f"— create one with `cuhksz-cli sis login --account {args.name}`", file=sys.stderr)
         return 1
     config.store_account(sis.cfg, args.name, accounts[args.name]["username"],
                          accounts[args.name].get("password"), make_default=True)
@@ -257,7 +257,7 @@ def cmd_raw(sis: Sis, args) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="sis-cli",
+    ap = argparse.ArgumentParser(prog="cuhksz-cli sis",
                                  description="sis.cuhk.edu.cn read-only CLI connector (PeopleSoft CS)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status", help="local session/credential evidence (no network or login)")
@@ -272,7 +272,7 @@ def main(argv=None) -> int:
     p.add_argument("--account", help="store the credentials under this account name (default: the username)")
     p.add_argument("--default", action="store_true",
                    help="also make this account the default (automatic re-login only ever uses the default)")
-    p.add_argument("--no-store", action="store_true", help="keep credentials off disk (default: stored in ~/.sis-cli)")
+    p.add_argument("--no-store", action="store_true", help="keep credentials off disk (default: stored in the cuhksz-cli sis home)")
     p.add_argument("--password-env")
 
     p = sub.add_parser("schedule", help="my weekly class schedule (--days adds day-of-week attribution from the student center page)")

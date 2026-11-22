@@ -1,19 +1,19 @@
 schema_version: 1
 id: cuhksz
-version: 0.2.2
-compat: ">= 0.2"
+version: 0.3.0
+compat: ">= 0.5.2"
 members: [cuhksz, bb, bb-map, bb-quiz, bb-teach, bb-track, sis, registry]
 connectors:
   - name: cuhksz-cli
     path: connectors/cuhksz-cli
-    note: "unified entry since 0.2.1 — 'cuhksz-cli bb ...' (Blackboard, bbcli backend) and 'cuhksz-cli sis ...' (PeopleSoft SIS, siscli backend); the legacy bb-cli / sis-cli console scripts remain as thin wrappers over the same backends; credential stores unchanged (~/.bb-cli/, ~/.sis-cli/)
+    note: "single entry since connector 0.3.0 — 'cuhksz-cli bb ...' (Blackboard, bbcli backend) and 'cuhksz-cli sis ...' (PeopleSoft SIS, siscli backend); the legacy bb-cli / sis-cli console scripts were removed; state lives in the machine substrate $OWFA_HOME/connectors/cuhksz-cli/homes/<id>/{bb,sis} (component_dir), with BB_CLI_HOME / SIS_CLI_HOME kept only as explicit compatibility overrides; migrate with 'cuhksz-cli home migrate [--dry-run]'"
 depends: [framework]
 uninstall:
   retains: [wiki/cuhksz/, cuhksz/]
-  credentials: [~/.bb-cli/, ~/.sis-cli/]
+  credentials: [$OWFA_HOME/connectors/cuhksz-cli/]
   bridges: [profile#domain-cognition, language#consumers]
   processes: []
-disclosure: "Read-only scraping of bb.cuhk.edu.cn and sis.cuhk.edu.cn via ADFS SSO; processes grades, coursework and enrollment records (privacy: high); credentials only on this machine (~/.bb-cli, ~/.sis-cli); academic data never enters any git repository."
+disclosure: "Read-only scraping of bb.cuhk.edu.cn and sis.cuhk.edu.cn via ADFS SSO; processes grades, coursework and enrollment records (privacy: high); credentials live only on this machine in the OWFA substrate ($OWFA_HOME/connectors/cuhksz-cli/homes/<id>/{bb,sis}; the legacy ~/.bb-cli / ~/.sis-cli only if never migrated); academic data never enters any git repository."
 menu:
   cuhksz: domain root — identity page, term digest, family territory
   bb: course-ops base — term/course identity pages

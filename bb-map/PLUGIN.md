@@ -31,6 +31,7 @@
 
 ## Changelog
 
+- 0.23 (2026-11-22): connector-home follow-up — the command skill names the connector's single entry (`cuhksz-cli bb ...`) and the legacy wrapper sentence is gone; placement contract unchanged
 - 0.22 (2026-11-16): dead-path fix — the post-write pipeline references rewritten to the suite path `python .owfa/plugins/domains/personal/pipeline.py <index|tags|hot|log|verify>`; the commit-discipline vocabulary pointer now `.owfa/protocol/actions.md` (`.meta/` was removed from the framework on 2026-11-15)
 - 0.21 (2026-11-12): connector aggregation follow-up — the bbcli skill references in the command skill reworded to the unified cuhksz-cli (bb backend); command surface unchanged
 - 0.20 (2026-10-08): info.md gains `## Course Conventions` — course-intrinsic conventions (professor's notation, grading habits) that hold for any learner, kept distinct from bb-track's user.md `## Preferences` (user-specific); explanation-principles.md dissolved into the two homes (reconstructed from git history)
