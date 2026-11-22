@@ -1,6 +1,6 @@
 # bb backend (cuhksz-cli bb) — CUHK-SZ Blackboard read-only connector
 
-> Per-backend deep reference of the unified `cuhksz-cli` connector (since 0.2.1; formerly the standalone `connectors/bb-cli` package). Entry points `cuhksz-cli bb ...` and the legacy `bb-cli ...` wrapper are equivalent.
+> Per-backend deep reference of the unified `cuhksz-cli` connector (since 0.2.1; formerly a standalone Blackboard connector package). Single entry point `cuhksz-cli bb ...` — the legacy wrapper was removed in 0.3.0 (migration table in SKILL.md).
 
 A command-line connector for `bb.cuhk.edu.cn` (Blackboard Learn Classic 3900.39): **a purely read-only data plane — no agent logic, no MCP, no monitoring** — serving as a fact interface for upper layers (wiki domain plugins / humans / scripts). The technical route follows bbwatch's empirical findings (curl_cffi fingerprint + ADFS OAuth2 + the official REST API); login details were rewritten from live reverse engineering on 2026-09-29.
 
@@ -13,7 +13,7 @@ Windows (PowerShell or Git Bash):
 ```text
 python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -e .
-./.venv/Scripts/python.exe -m bbcli --help
+./.venv/Scripts/python.exe -m cuhkszcli bb --help
 ```
 
 macOS / Linux:
@@ -21,12 +21,12 @@ macOS / Linux:
 ```text
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -e .
-./.venv/bin/python -m bbcli --help
+./.venv/bin/python -m cuhkszcli bb --help
 ```
 
 On hosts using uv, `uv venv .venv` and `uv pip install --python .venv -e .` are an alternative; use the corresponding environment's Python path above to run the module. No `--break-system-packages` is needed for a virtual environment.
 
-If an earlier `pip --user` installation succeeded but `bb-cli` is not found, run `python -m bbcli --help` using the **same Python that installed it**. This bypasses the missing console-script PATH entry. `No module named bbcli` means that interpreter cannot see the installed package; check `python -m pip show bbcli` and use the intended environment instead of reinstalling globally. For the default user-install script directory, use:
+If an earlier `pip --user` installation succeeded but `cuhksz-cli` is not found, run `python -m cuhkszcli bb --help` using the **same Python that installed it**. This bypasses the missing console-script PATH entry. `No module named cuhkszcli` means that interpreter cannot see the installed package; check `python -m pip show bbcli` and use the intended environment instead of reinstalling globally. For the default user-install script directory, use:
 
 ```text
 python -c "import sysconfig; print(sysconfig.get_path('scripts', scheme=sysconfig.get_preferred_scheme('user')))"
@@ -38,14 +38,14 @@ Dependencies are only `curl_cffi` (Chrome TLS fingerprint — the site rejects p
 
 ## Authentication
 
-- `bb-cli login`: interactively enter your student id and password (the password is not echoed). The student id automatically gets the `cuhksz\` domain prefix appended (matching the login page's custom JS); input already containing `@` or `\` is left unchanged.
-- Credentials and sessions live only in the local user directory `~/.bb-cli/` (`BB_CLI_HOME` can override): `config.json` (credentials, permission 0600) + `session.json` (cookie jar). **Never written into any repository.**
+- `cuhksz-cli bb login`: interactively enter your student id and password (the password is not echoed). The student id automatically gets the `cuhksz\` domain prefix appended (matching the login page's custom JS); input already containing `@` or `\` is left unchanged.
+- Credentials and sessions live only in the local machine substrate: `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/bb/` — `config.json` (credentials, permission 0600) + `session.json` (cookie jar). `cuhksz-cli home status` prints the effective path; `BB_CLI_HOME` remains an explicit override (and a machine with no OWFA helper falls back to the legacy `~/.bb-cli`, printed with a migration notice). **Never written into any repository.**
 - Off-disk option: `--password-env VAR` (or the `BB_CLI_PASSWORD` environment variable) + `--no-store`.
 - An expired session automatically re-logs in once and replays the request (triggered by 401).
 
-**Multiple accounts & the default account** (0.2.0): credentials are stored per account (`login --account <name>`, default name = the username) as `{"accounts": {name: {username, password}}, "default_account": name}`; the legacy flat config is still read as an implicit default account and normalized on the next save. **Automatic re-login only ever uses the default account** — the first stored login becomes it automatically; `bb-cli default` shows it, `bb-cli default <name>` switches (clearing the session so the next command deterministically logs in as it); `bb-cli accounts` lists accounts (passwords never shown). When several accounts are stored and no default is set, auto-login refuses to pick one and says so. Recommended init: run `bb-cli login` manually once to leave credentials, and confirm the default (`bb-cli default`). The environment variables only apply to explicit `login` (plus a last-resort auto-login fallback when no default account has stored credentials).
+**Multiple accounts & the default account** (0.2.0): credentials are stored per account (`login --account <name>`, default name = the username) as `{"accounts": {name: {username, password}}, "default_account": name}`; the legacy flat config is still read as an implicit default account and normalized on the next save. **Automatic re-login only ever uses the default account** — the first stored login becomes it automatically; `cuhksz-cli bb default` shows it, `cuhksz-cli bb default <name>` switches (clearing the session so the next command deterministically logs in as it); `cuhksz-cli bb accounts` lists accounts (passwords never shown). When several accounts are stored and no default is set, auto-login refuses to pick one and says so. Recommended init: run `cuhksz-cli bb login` manually once to leave credentials, and confirm the default (`cuhksz-cli bb default`). The environment variables only apply to explicit `login` (plus a last-resort auto-login fallback when no default account has stored credentials).
 
-- `bb-cli logout` logs out and clears the local session (stored accounts are kept — manage them with `bb-cli accounts`).
+- `cuhksz-cli bb logout` logs out and clears the local session (stored accounts are kept — manage them with `cuhksz-cli bb accounts`).
 
 ## Commands (all read-only, JSON by default, `--format text` for humans)
 
@@ -90,17 +90,19 @@ The course argument accepts: a course id (`_18030_1`), a course code, or a name 
 
 `status` is an offline diagnostic (issue #16): zero network requests, zero login attempts, no auto re-login. It separates the session **state** from the re-login **capability** instead of collapsing both into one `authenticated` boolean:
 
-- `session_file`: does `~/.bb-cli/session.json` exist.
+- `session_file`: does the bb component's `session.json` exist (path printed by `cuhksz-cli home status`).
 - `session_valid`: does that file contain a loadable cookie jar — **local evidence only** (the jar stores no expiry, and server validity is deliberately not checked). `true` means "cookie present", not "server-verified live".
-- `auto_relogin`: tri-state, aligned with sis-cli's two blocked reasons — `"available"` when the default account has stored credentials (or the `BB_CLI_USERNAME`/`BB_CLI_PASSWORD` env fallback is set) — any real command re-logs in silently on 401; `"blocked (no stored credentials)"` when manual `bb-cli login` is required; `"blocked (no default account)"` when credentials for several accounts are on disk but no default is picked (fix with `bb-cli default <name>`, not by re-entering credentials). This check reads config/env only, no network, and comes from the same probe as `resolve_auto_credentials` (`config.auto_credentials_state`) — no parallel hand-rolled chain.
+- `auto_relogin`: tri-state, aligned with the sis backend's two blocked reasons — `"available"` when the default account has stored credentials (or the `BB_CLI_USERNAME`/`BB_CLI_PASSWORD` env fallback is set) — any real command re-logs in silently on 401; `"blocked (no stored credentials)"` when manual `cuhksz-cli bb login` is required; `"blocked (no default account)"` when credentials for several accounts are on disk but no default is picked (fix with `cuhksz-cli bb default <name>`, not by re-entering credentials). This check reads config/env only, no network, and comes from the same probe as `resolve_auto_credentials` (`config.auto_credentials_state`) — no parallel hand-rolled chain.
 - `user`: always `null` offline (kept for output-shape continuity).
 - `default_account` / `accounts`: which account automatic re-login would use; `default_account` is a local account label that may equal the student id (legacy configs name the account after the username).
 
-Reading it right: `session_valid=false, auto_relogin="available"` (expired session, credentials on disk) is **not** an error and not a manual-login condition — the next real command renews the session itself. Only an `auto_relogin="blocked …"` value calls for action: `login` for `no stored credentials`, `bb-cli default <name>` for `no default account`.
+Reading it right: `session_valid=false, auto_relogin="available"` (expired session, credentials on disk) is **not** an error and not a manual-login condition — the next real command renews the session itself. Only an `auto_relogin="blocked …"` value calls for action: `cuhksz-cli bb login` for `no stored credentials`, `cuhksz-cli bb default <name>` for `no default account`.
 
 ### Changelog
 
-- 0.2.2 (PR #17 review fixes, **breaking**): `status` no longer emits the `authenticated` boolean; consumers must read `session_file` / `session_valid` (local jar evidence) and the tri-state `auto_relogin` instead. The new "can this renew itself?" predicate is simply `auto_relogin == "available"`; `session_valid` only reflects the local cookie jar and never implies server-side validity. `auto_relogin` is now three-valued — the multi-account-no-default case reports `"blocked (no default account)`" (credentials exist on disk; fix with `bb-cli default <name>`) instead of the previous misleading `"blocked (no stored credentials)"`. Both blocked reasons mirror sis-cli's `blocked_missing_credentials` / `blocked_no_default_account`.
+- 0.2.2 (PR #17 review fixes, **breaking**): `status` no longer emits the `authenticated` boolean; consumers must read `session_file` / `session_valid` (local jar evidence) and the tri-state `auto_relogin` instead. The new "can this renew itself?" predicate is simply `auto_relogin == "available"`; `session_valid` only reflects the local cookie jar and never implies server-side validity. `auto_relogin` is now three-valued — the multi-account-no-default case reports `"blocked (no default account)`" (credentials exist on disk; fix with the `default` command) instead of the previous misleading `"blocked (no stored credentials)"`. Both blocked reasons mirror the sis backend's `blocked_missing_credentials` / `blocked_no_default_account`.
+
+- 0.3.0 (2026-11-22): machine-substrate adoption — state moves to `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/bb/` (resolved through `.owfa/scripts/owfa_home.py`), `home status` / `home migrate` added, and the legacy console entry point was removed (single `cuhksz-cli` entry; `cuhksz-cli bb ...` is the only spelling). `BB_CLI_HOME` stays as an explicit override.
 
 ## Acknowledgments
 

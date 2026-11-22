@@ -26,7 +26,9 @@
 
 ## Changelog
 
-- 0.3 (2026-11-12) connector aggregation follow-up: sis-cli DPR references reworded to the unified cuhksz-cli sis dpr
+- 0.4 (2026-11-22) connector-home wording follow-up: DPR references name the connector's substrate home; no contract change
+
+- 0.3 (2026-11-12) connector aggregation follow-up: standalone sis-connector DPR references reworded to the unified cuhksz-cli sis dpr
 
 - 0.2 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 

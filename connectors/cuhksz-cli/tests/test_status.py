@@ -187,7 +187,7 @@ class StatusIntegrationTests(unittest.TestCase):
 
 
 class BBStatusTests(unittest.TestCase):
-    """bb-cli status tri-state contract (issue #16): offline evidence only —
+    """bb backend status tri-state contract (issue #16): offline evidence only —
     session state (cookie jar on disk) vs. capability (stored credentials),
     never triggering network or login."""
 
@@ -287,14 +287,14 @@ class BBStatusTests(unittest.TestCase):
             config_bytes=b'{"accounts": {"a": {"username": "ua", "password": "test-secret"},'
                          b' "b": {"username": "ub", "password": "test-secret"}}}', fmt="text")
         self.assertIn("auto_relogin=blocked (no default account)", text)
-        self.assertIn("run `bb-cli default <name>`", text)
+        self.assertIn("run `cuhksz-cli bb default <name>`", text)
         self.assertNotIn("no stored credentials", text)
 
     def test_text_format_uses_tri_state_and_hint(self):
         text = self.run_bb_status(fmt="text")
         self.assertIn("auto_relogin=blocked (no stored credentials)", text)
         self.assertIn("session_valid=no", text)
-        self.assertIn("run `bb-cli login`", text)
+        self.assertIn("run `cuhksz-cli bb login`", text)
         self.assertNotIn("authenticated=", text)
 
     def test_text_format_no_hint_when_relogin_available(self):

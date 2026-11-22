@@ -1,6 +1,6 @@
 """ADFS OAuth2 login: exchange an authorization code at sts.cuhk.edu.cn for a PeopleSoft session (verified 2026-10-05).
 
-The flow shares its source with bb-cli (same ADFS, same cuhksz\\ domain
+The flow shares its source with the bb backend (same ADFS, same cuhksz\\ domain
 prefix rule); the difference is the code consumer: SIS's dologin.html is a
 static page whose JS builds a form POSTing to /psp/csprd/?cmd=login (fixed
 service account CUSZ_SSO_LOGIN + a random password; the PeopleSoft backend

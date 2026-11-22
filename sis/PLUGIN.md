@@ -14,7 +14,7 @@
 
 - Materialization zone `cuhksz/sis/`: official personal PDFs, append-only (unlike the bb courseware workspace — this zone receives only school-issued enrollment documents)
 - Territory `wiki/cuhksz/sis/`: inbox.md digest page (recent window: schedule overview/registration windows/holds/grade snapshot; rows tagged with term; whole page regenerable with short TTL, created when absent) + docs/ proxy pages (raw_file/raw_sha256 pointing into the materialization zone)
-- The sis backend of the unified cuhksz-cli connector (connectors/cuhksz-cli/, siscli module; legacy sis-cli wrapper equivalent): ADFS OAuth2 same-source + PeopleSoft PIA adaptation (PS_DEVICEFEATURES shell-breaking, direct psc+PTCNAV component hits, term radio POST), fully read-only
+- The sis backend of the unified cuhksz-cli connector (connectors/cuhksz-cli/, siscli module): ADFS OAuth2 same-source + PeopleSoft PIA adaptation (PS_DEVICEFEATURES shell-breaking, direct psc+PTCNAV component hits, term radio POST), fully read-only
 
 ## Invariants
 
@@ -22,13 +22,15 @@
 - Trust ceiling machine-confirmed; stale_after = pull date + TTL (default 1 day for the digest; date granularity); the agent is the synchronizer
 - One-way derivation (out-only): registration windows nearing → todo; schedule/exam arrangements → calendar; term grades → bb-track evidence stream (intra-domain direct reference, after user confirmation); high-value conclusions → notes with backlinks
 - Privacy red line: grade and enrollment data are instance data, never entering the framework repository; CLI output stays in the terminal and the conversation
-- Credential discipline: stored locally at ~/.sis-cli/, never in the repository
+- Credential discipline: stored locally in the OWFA substrate (`$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/sis/`, located with `cuhksz-cli home status`; `SIS_CLI_HOME` only as an explicit override), never in the repository
 
 ## Changelog
 
-- 0.4 (2026-11-12) connector aggregation: sis-cli merged into the unified cuhksz-cli connector as its sis backend (legacy sis-cli entry point kept as a thin wrapper); connector references updated, credential store ~/.sis-cli/ unchanged
+- 0.5 (2026-11-22) connector-home adoption: the connector's state moved into the OWFA machine substrate (`$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/sis/`, resolved through `.owfa/scripts/owfa_home.py`); the legacy sis entry point was removed in connector 0.3.0 — `cuhksz-cli sis ...` is the only spelling, migration via `cuhksz-cli home migrate`
+
+- 0.4 (2026-11-12) connector aggregation: the standalone sis connector merged into the unified cuhksz-cli connector as its sis backend; connector references updated, credential store unchanged
 
 - 0.3 (2026-10-06) inject_tier: member — exits the AGENTS.md injection region per the issue #12 layer discipline (exposure: family-root roster line + skill catalog + on-demand manifest reads)
 
 - 0.2 (2026-10-05) official personal documents switched to in-domain materialization (cuhksz/sis/ + the territory's docs/ proxy pages, owner-ruling revision — the old vault route was inertia from the device containerless precedent)
-- 0.1 (2026-10-05) established: first established with the cuhksz domain; the sis-cli v0.2 connector present beforehand
+- 0.1 (2026-10-05) established: first established with the cuhksz domain; the standalone sis connector v0.2 present beforehand

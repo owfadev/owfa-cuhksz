@@ -1,8 +1,8 @@
 # sis backend (cuhksz-cli sis) — CUHK-SZ SIS read-only connector
 
-> Per-backend deep reference of the unified `cuhksz-cli` connector (since 0.2.1; formerly the standalone `connectors/sis-cli` package). Entry points `cuhksz-cli sis ...` and the legacy `sis-cli ...` wrapper are equivalent.
+> Per-backend deep reference of the unified `cuhksz-cli` connector (since 0.2.1; formerly a standalone SIS connector package). Single entry point `cuhksz-cli sis ...` — the legacy wrapper was removed in 0.3.0 (migration table in SKILL.md).
 
-A command-line connector for `sis.cuhk.edu.cn` (Oracle PeopleSoft Campus Solutions): **a purely read-only data plane — no agent logic, no MCP, no monitoring** — serving as a fact interface for upper layers (wiki domain plugins / humans / scripts). The technical route and login findings carry over from bb-cli (the same ADFS `sts.cuhk.edu.cn`, the same `cuhksz\` domain-prefix rule); the PeopleSoft-side login and component access were written from live reverse engineering on 2026-10-05.
+A command-line connector for `sis.cuhk.edu.cn` (Oracle PeopleSoft Campus Solutions): **a purely read-only data plane — no agent logic, no MCP, no monitoring** — serving as a fact interface for upper layers (wiki domain plugins / humans / scripts). The technical route and login findings carry over from the bb backend (the same ADFS `sts.cuhk.edu.cn`, the same `cuhksz\` domain-prefix rule); the PeopleSoft-side login and component access were written from live reverse engineering on 2026-10-05.
 
 ## Installation
 
@@ -13,7 +13,7 @@ Windows (PowerShell or Git Bash):
 ```text
 python -m venv .venv
 ./.venv/Scripts/python.exe -m pip install -e .
-./.venv/Scripts/python.exe -m siscli --help
+./.venv/Scripts/python.exe -m cuhkszcli sis --help
 ```
 
 macOS / Linux:
@@ -21,12 +21,12 @@ macOS / Linux:
 ```text
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -e .
-./.venv/bin/python -m siscli --help
+./.venv/bin/python -m cuhkszcli sis --help
 ```
 
 On hosts using uv, `uv venv .venv` and `uv pip install --python .venv -e .` are an alternative; use the corresponding environment's Python path above to run the module. No `--break-system-packages` is needed for a virtual environment.
 
-If an earlier `pip --user` installation succeeded but `sis-cli` is not found, run `python -m siscli --help` using the **same Python that installed it**. This bypasses the missing console-script PATH entry. `No module named siscli` means that interpreter cannot see the installed package; check `python -m pip show siscli` and use the intended environment instead of reinstalling globally. For the default user-install script directory, use:
+If an earlier `pip --user` installation succeeded but `cuhksz-cli` is not found, run `python -m cuhkszcli sis --help` using the **same Python that installed it**. This bypasses the missing console-script PATH entry. `No module named cuhkszcli` means that interpreter cannot see the installed package; check `python -m pip show siscli` and use the intended environment instead of reinstalling globally. For the default user-install script directory, use:
 
 ```text
 python -c "import sysconfig; print(sysconfig.get_path('scripts', scheme=sysconfig.get_preferred_scheme('user')))"
@@ -40,13 +40,13 @@ Dependencies are only `curl_cffi` (Chrome TLS fingerprint) and `beautifulsoup4`.
 
 Flow (fully HTTP-reproducible, no browser):
 
-1. `sts.cuhk.edu.cn/adfs/oauth2/authorize` (client_id registered to SIS) → ADFS form login (same source as bb-cli: a single POST, the student id automatically gets the `cuhksz\` prefix);
+1. `sts.cuhk.edu.cn/adfs/oauth2/authorize` (client_id registered to SIS) → ADFS form login (same source as the bb backend: a single POST, the student id automatically gets the `cuhksz\` prefix);
 2. the callback `sis.cuhk.edu.cn/sso/dologin.html?code=…` is a static page — replicate its JS form and POST `/psp/csprd/?cmd=login&languageCd=…&code=…` (fixed service account `CUSZ_SSO_LOGIN` + a random password; GET that URL first to warm up `PSJSESSIONID` before POSTing);
 3. the PeopleSoft backend exchanges the code for a session; once `PS_TOKEN` lands, the login has succeeded.
 
-Credentials and sessions live only in the local `~/.sis-cli/` (`SIS_CLI_HOME` can override): `config.json` (credentials, permission 0600) + `session.json` (cookie jar). **Never written into any repository.** Off-disk option: the environment variables `SIS_CLI_USERNAME` / `SIS_CLI_PASSWORD`, or `sis-cli login --no-store`.
+Credentials and sessions live only in the local machine substrate: `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/sis/` — `config.json` (credentials, permission 0600) + `session.json` (cookie jar). `cuhksz-cli home status` prints the effective path; `SIS_CLI_HOME` remains an explicit override (and a machine with no OWFA helper falls back to the legacy `~/.sis-cli`, printed with a migration notice). **Never written into any repository.** Off-disk option: the environment variables `SIS_CLI_USERNAME` / `SIS_CLI_PASSWORD`, or `cuhksz-cli sis login --no-store`.
 
-**Multiple accounts & the default account** (0.4.0): credentials are stored per account (`login --account <name>`, default name = the username) as `{"accounts": {name: {username, password}}, "default_account": name}`; the legacy flat config is still read as an implicit default account and normalized on the next save. **Automatic re-login (per command — see below) only ever uses the default account**: the first stored login becomes it automatically; `sis-cli default` shows it, `sis-cli default <name>` switches (clearing the session so the next command deterministically logs in as it); `sis-cli accounts` lists accounts (passwords never shown). When several accounts are stored and no default is set, auto-login refuses to pick one and says so. Recommended init: run `sis-cli login` manually once to leave credentials, and confirm the default (`sis-cli default`). The environment variables only apply to explicit `login` (plus a last-resort auto-login fallback when no default account has stored credentials).
+**Multiple accounts & the default account** (0.4.0): credentials are stored per account (`login --account <name>`, default name = the username) as `{"accounts": {name: {username, password}}, "default_account": name}`; the legacy flat config is still read as an implicit default account and normalized on the next save. **Automatic re-login (per command — see below) only ever uses the default account**: the first stored login becomes it automatically; `cuhksz-cli sis default` shows it, `cuhksz-cli sis default <name>` switches (clearing the session so the next command deterministically logs in as it); `cuhksz-cli sis accounts` lists accounts (passwords never shown). When several accounts are stored and no default is set, auto-login refuses to pick one and says so. Recommended init: run `cuhksz-cli sis login` manually once to leave credentials, and confirm the default (`cuhksz-cli sis default`). The environment variables only apply to explicit `login` (plus a last-resort auto-login fallback when no default account has stored credentials).
 
 **Short-lived sessions**: in live testing `PS_TOKEN` expires in about 5 minutes, and `PORTAL-PSJSESSIONID` is re-issued on a rolling basis with each response. CLI strategy: write through session.json after every request; when component access hits the login shell, automatically re-login once and replay — using the **default account's** stored credentials (the ADFS session persists, so a re-login costs ≈ two requests).
 
@@ -100,7 +100,7 @@ Raw paths starting with `/` get rewritten by MSYS; prefix the command with `MSYS
 - `authenticated: null`, `authentication_checked: false`: authentication is unknown, including when cached cookies exist. This changes the old boolean field; consumers must not treat null as an authenticated state.
 - `session`: `cached_unverified` when a local token loads; `absent_or_unusable` when it does not; `unreadable` when a local error escapes the loader (for example, malformed cookie entries). The loader itself handles invalid JSON, unreadable bytes/files and empty/non-list jars by returning no usable session, so those cases report `absent_or_unusable`; `unreadable` is not a complete inventory of damaged files. An absent token does not say whether credentials could establish a new session.
 - `reachable: null`, `network_checked: false`: network reachability is unknown, never inferred from cached state or missing credentials.
-- `relogin`: `credentials_available_unverified`, `blocked_missing_credentials`, or `blocked_no_default_account` (multiple accounts stored but no default picked — fix with `sis-cli default <name>` rather than re-entering credentials), using the same resolver as normal re-login (including its environment-variable policy). No credentials or raw exception messages are emitted.
+- `relogin`: `credentials_available_unverified`, `blocked_missing_credentials`, or `blocked_no_default_account` (multiple accounts stored but no default picked — fix with `cuhksz-cli sis default <name>` rather than re-entering credentials), using the same resolver as normal re-login (including its environment-variable policy). No credentials or raw exception messages are emitted.
 - `default_account` / `accounts`: which account automatic re-login would use. `default_account` is a local account label that may contain a student identifier (legacy configs name the account after the username) — documented disclosure; passwords and token values remain the non-disclosure line, and output stays on the local machine.
 - `components` lists supported commands, not verified server permissions. Exit 0 means the diagnostic completed.
 - A non-object JSON configuration is treated as empty, just like missing or invalid JSON; the original file is not rewritten. Constructing the client may create an empty local home directory, but status does not write configuration or session files.
@@ -110,4 +110,5 @@ A subsequent user-requested read may report a network failure (check campus netw
 ### Changelog
 
 - 0.3.1: replace optimistic status/silent-login behavior with explicit offline evidence, unknown authentication/reachability, and credential availability. Normal login and query behavior is unchanged.
-- 0.3.2 (issue #9 follow-up): split `blocked_missing_credentials` into `blocked_missing_credentials` vs. `blocked_no_default_account`; document the `default_account` label disclosure (may contain a student id). This closes the indistinguishable-failure-mode gap with bb-cli's tri-state contract (issue #16).
+- 0.3.2 (issue #9 follow-up): split `blocked_missing_credentials` into `blocked_missing_credentials` vs. `blocked_no_default_account`; document the `default_account` label disclosure (may contain a student id). This closes the indistinguishable-failure-mode gap with the bb backend's tri-state contract (issue #16).
+- 0.3.0 (2026-11-22): machine-substrate adoption — state moves to `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/sis/` (resolved through `.owfa/scripts/owfa_home.py`), `home status` / `home migrate` added, and the legacy console entry point was removed (single `cuhksz-cli` entry; `cuhksz-cli sis ...` is the only spelling). `SIS_CLI_HOME` stays as an explicit override.

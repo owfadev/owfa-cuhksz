@@ -3,17 +3,20 @@
 One entry, two backends (unchanged modules, moved in-repo under this
 connector): `bbcli` reads bb.cuhk.edu.cn (Blackboard Learn), `siscli` reads
 sis.cuhk.edu.cn (PeopleSoft Campus Solutions). `cuhksz-cli bb <...>` and
-`cuhksz-cli sis <...>` dispatch to them; the legacy `bb-cli` / `sis-cli`
-console scripts keep working unchanged as thin wrappers over the same
-backends.
+`cuhksz-cli sis <...>` dispatch to them; `cuhksz-cli home status|migrate` is
+the machine-substrate surface. The legacy `bb-cli` / `sis-cli` console
+scripts were removed in 0.3.0.
 
-Credential stores are NOT aggregated: bb sessions/config stay in ~/.bb-cli/
-(BB_CLI_HOME), sis in ~/.sis-cli/ (SIS_CLI_HOME) — exactly as before.
+Credential stores are NOT aggregated into one directory: bb sessions/config
+live in the `bb` component and sis in the `sis` component of the connector's
+single substrate home, `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/`
+(`BB_CLI_HOME` / `SIS_CLI_HOME` remain explicit compatibility overrides).
+See the migration section of SKILL.md.
 
 Discipline: read-only — never issues any write request (the single
 deliberate exception, inherited from siscli, is the term-selection
 "Continue" POST on PeopleSoft search pages); credentials and sessions live
-only in the user directory, never in any repository.
+only in the machine substrate, never in any repository.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"

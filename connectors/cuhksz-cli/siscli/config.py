@@ -1,8 +1,11 @@
 """Configuration and paths: every tunable lives here.
 
-Credentials/sessions live only in the user directory (default ~/.sis-cli,
-SIS_CLI_HOME overrides); never written into the working directory or any
-repository. Environment variables take precedence over the config file.
+Credentials/sessions live only on the local machine, in the cuhksz-cli
+substrate home `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/sis/`
+(`SIS_CLI_HOME` stays as an explicit compatibility override, and a machine with
+no OWFA helper falls back to the legacy `~/.sis-cli` with a loud notice); never
+written into the working directory or any repository. Environment variables
+take precedence over the config file.
 """
 
 from __future__ import annotations
@@ -12,6 +15,8 @@ import os
 import stat
 import sys
 from pathlib import Path
+
+from cuhkszcli import home as connector_home
 
 SIS_HOST = "https://sis.cuhk.edu.cn"
 ADFS_CLIENT_ID = "3f09a73c-33cf-49b8-8f0c-b79ea2f3e83b"
@@ -70,7 +75,7 @@ TRANSCRIPT_TYPE_FIELD = "DERIVED_SSTSRPT_TSCRPT_TYPE3"
 # Components that require term selection + Continue (uniform interaction: radio SSR_DUMMY_RECV1$sels$0 + DERIVED_SSS_SCT_SSR_PB_GO)
 TERM_COMPONENTS = {"grades", "appt", "exam", "list_schedule"}
 
-ENV_HOME = "SIS_CLI_HOME"
+ENV_HOME = connector_home.ENV_OVERRIDES["sis"]  # compatibility override; the default is the substrate home
 ENV_USERNAME = "SIS_CLI_USERNAME"
 ENV_PASSWORD = "SIS_CLI_PASSWORD"
 ENV_PROXY = "SIS_CLI_PROXY"
@@ -78,10 +83,8 @@ ENV_DEBUG = "SIS_CLI_DEBUG"  # set to a directory path to dump debug HTML
 
 
 def sis_home() -> Path:
-    root = os.environ.get(ENV_HOME)
-    home = Path(root).expanduser() if root else Path.home() / ".sis-cli"
-    home.mkdir(parents=True, exist_ok=True)
-    return home
+    # explicit SIS_CLI_HOME > substrate component_dir > legacy ~/.sis-cli (loud)
+    return connector_home.resolve_component("sis")["path"]
 
 
 def config_path() -> Path:
@@ -178,11 +181,11 @@ class AutoLoginBlocked(SystemExit):
 _AUTO_LOGIN_HINTS = {
     "missing_credentials":
         "No credentials for automatic re-login (auto-login only ever uses the DEFAULT account): "
-        "run `sis-cli login --account <name>` interactively to store credentials, then "
-        "`sis-cli default <name>` — the first stored account becomes the default automatically",
+        "run `cuhksz-cli sis login --account <name>` interactively to store credentials, then "
+        "`cuhksz-cli sis default <name>` — the first stored account becomes the default automatically",
     "no_default_account":
         "Multiple stored accounts and no default set — automatic re-login refuses to pick one: "
-        "run `sis-cli default <name>` to choose (credentials are already on disk)",
+        "run `cuhksz-cli sis default <name>` to choose (credentials are already on disk)",
 }
 
 

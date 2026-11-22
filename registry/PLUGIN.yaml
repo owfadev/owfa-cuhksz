@@ -1,12 +1,12 @@
 id: registry
-version: 0.3
+version: 0.4
 depends:
   - cuhksz
   - domain
   - wiki
   - trust
   - log
-updated: 2026-11-12
+updated: 2026-11-22
 attachment:
   - "cuhksz/registry/ — academic regulations materialization zone (public PDFs of registry.cuhk.edu.cn materialized append-only; public institutional documents, not personal assets)"
   - "wiki/cuhksz/registry/ — regulations territory: schemes.md (university-wide curriculum scheme index — college → major → scheme page pointers, human-machine co-maintained) + <scheme-name>.md (proxy pages: raw pointers + key-point distillation + version cross-checking)"

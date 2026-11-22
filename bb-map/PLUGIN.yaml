@@ -1,9 +1,9 @@
 id: bb-map
-version: 0.22
+version: 0.23
 depends:
   - bb
   - wiki
-updated: 2026-11-16
+updated: 2026-11-22
 attachment:
   - "wiki/cuhksz/bb/<term>/<course>/info.md — course information page doubling as identity page (bb block mapping term_id/course_id/term_status + distillation of syllabus course-policy key points (open vocabulary, info-N anchors) + notes accumulation)"
   - "wiki/cuhksz/bb/<term>/<course>/courseware/ — knowledge-point pages (one per content unit: knowledge-point summary (sm-N anchors + section hints) + glossary + unit file list + raw_path pointer (may point to a directory or be absent); pure proxy, whole page regenerable)"
