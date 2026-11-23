@@ -1,6 +1,6 @@
 [project]
 name = "cuhkszcli"
-version = "0.4.1"
+version = "0.4.2"
 description = "CUHK-SZ unified read-only CLI connector (bb.cuhk.edu.cn Blackboard + sis.cuhk.edu.cn PeopleSoft SIS)"
 requires-python = ">=3.10"
 dependencies = [

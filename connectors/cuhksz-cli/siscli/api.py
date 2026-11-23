@@ -62,8 +62,10 @@ class Sis:
     def term_query(self, name: str, term: str | None = None) -> dict:
         """term-interaction component: GET the search page → pick a term → POST Continue → return {terms, term, html}.
 
-        term=None picks the page's first entry (the newest); passing a
-        label substring (e.g. '2026-27 Term 2') fuzzy-matches the term name.
+        term=None picks the page's first entry (the newest); passing an exact
+        strm code (e.g. '2620') or a label substring (e.g. '2026-27 Term 2')
+        chooses the term. The term-search page carries labels only, so a strm
+        is matched against the code derived from each label.
         """
         html = self.component_html(name)
         terms = parser.parse_terms(html)
@@ -72,11 +74,17 @@ class Sis:
         pick = terms[0]
         if term:
             for t in terms:
-                if term.lower() in t["term"].lower():
+                if parser.term_strm(t["term"]) == term:
                     pick = t
                     break
             else:
-                raise SystemExit(f"Term not matched: {term!r}; available: {[t['term'] for t in terms]}")
+                for t in terms:
+                    if term.lower() in t["term"].lower():
+                        pick = t
+                        break
+                else:
+                    options = [f"{t['term']} ({parser.term_strm(t['term']) or '?'})" for t in terms]
+                    raise SystemExit(f"Term not matched: {term!r}; available: {options}")
         result = self.transport.submit_search(html, pick["idx"])
         return {"terms": terms, "term": pick["term"], "html": result}
 

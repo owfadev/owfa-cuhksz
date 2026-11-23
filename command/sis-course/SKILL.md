@@ -28,7 +28,7 @@ Read: cuhksz-cli sis (`search` for the catalog, `status` for the session), `wiki
 
 ## Prohibitions
 
-- **Never** enroll, add to cart, drop/swap, submit, or perform any state-changing transaction; the only network flow is the read-only Class Search query
+- **Never** enroll, add to cart, drop/swap, submit, or perform any state-changing transaction; the only network flow is the read-only Class Search query — the two-step search plus the per-course "View All Sections" (`hviewall`) expansion; both are pure query actions
 - Never present the output as an optimal or final choice, never make the decision for the user, never promise seat availability or an enrollment outcome
 - Never hide the 3-section default, the `--all-sections` cap/expansion failure, or the 50-class notice when they affect the answer; never invent a section/time that the query did not return
 - Never paste raw SIS HTML (contains personal data) or credentials into the answer or any repository; student data stays in the conversation on the local machine

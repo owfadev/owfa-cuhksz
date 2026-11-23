@@ -20,6 +20,13 @@ _COURSE_CODE_TIGHT = re.compile(r"^[A-Z]{2,4}\s\d{3,4}$")
 # (radio rows, grade/appt result pages), so it must match mid-string.
 _TERM_LABEL = re.compile(r"\d{4}-\d{2}\s+(?:Term\s+\d|Summer Session)")
 
+# Enrollment unit limits: a label cell ("Max Total Units") and a value cell
+# ("18.00") are separate cells. The live page renders both labels in one row
+# and both values in the next, so the parser reads each group in document
+# order and zips them — never label→number line adjacency.
+_LIMIT_LABEL = re.compile(r"(?:Max|Min) Total Units\s*$")
+_LIMIT_VALUE = re.compile(r"\d+(?:\.\d+)?")
+
 
 def parse_terms(html: str) -> list[dict]:
     """Term list from the term search page: radio idx → term name (the page is reverse-ordered, newest first)."""
@@ -104,6 +111,10 @@ def ic_state_fields(payload: str) -> dict[str, str]:
 # captures the start year. Kept separate from the unanchored `_TERM_LABEL`
 # above — assigning one name twice used to shadow the unanchored scan.
 _TERM_DROPDOWN_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Session)", re.I)
+# PeopleSoft strm derivation from the same label: <yy><term digit><0>, e.g.
+# 2026-27 Term 2 → 2620 (verified against the Class Search dropdown). Summer
+# Session follows Term 2 in the scheme, so it maps to 2630.
+_TERM_STRM_LABEL = re.compile(r"^(\d{4})-\d{2}\s+(?:Term\s+(\d)|Summer Session)", re.I)
 
 
 def _today() -> date:
@@ -115,6 +126,19 @@ def term_year(label: str) -> int | None:
     """Start year of a term label ("2026-27 Term 2" → 2026); None when unparseable."""
     m = _TERM_DROPDOWN_LABEL.match(label)
     return int(m.group(1)) if m else None
+
+
+def term_strm(label: str) -> str | None:
+    """PeopleSoft strm code for a term label ("2026-27 Term 2" → "2620").
+
+    The term-search pages used by grades/appt/exam expose only labels (no strm
+    values), so the code is derived the same way the Class Search dropdown
+    spells it: start-year last two digits + term digit + 0.
+    """
+    m = _TERM_STRM_LABEL.match(label)
+    if not m:
+        return None
+    return f"{int(m.group(1)) % 100:02d}{m.group(2) or '3'}0"
 
 
 def match_terms(terms: list[dict], query: str) -> list[dict]:
@@ -307,6 +331,42 @@ def parse_history(html: str) -> list[dict]:
     return dedup
 
 
+def _parse_appt_limits(soup: BeautifulSoup, text: str) -> dict[str, str]:
+    """Unit limits from the `Enrollment Limits` table, with a text-only fallback.
+
+    Live ground truth (2026-11-23): "Term Enrollment Limits" heads a 2-column
+    grid whose label row is `Max Total Units | Min Total Units` and whose value
+    row is `18.00 | 9.00`. Text order is therefore label, label, value, value;
+    a per-line label→number regex pairs `Min` with `18.00` and loses `Max`
+    entirely. Read the label cells and the numeric cells in document order and
+    zip them instead. The innermost matching table wins — every ancestor also
+    contains the text (and its cells would mix in the whole page).
+    """
+    try:
+        candidates = [tb for tb in soup.find_all("table")
+                      if "Enrollment Limits" in tb.get_text(" ", strip=True)]
+        if candidates:
+            table = min(candidates, key=lambda tb: len(tb.find_all("table")))
+            cells = [c.get_text(" ", strip=True) for c in table.find_all(["td", "th"])]
+            labels = [c for c in cells if _LIMIT_LABEL.match(c)]
+            values = [c for c in cells if _LIMIT_VALUE.fullmatch(c)]
+            if labels and values:
+                return dict(zip(labels, values))
+    except Exception:
+        pass  # malformed page: fall through to the text scan
+    try:
+        hits = list(re.finditer(r"(?:Max|Min) Total Units", text))
+        if not hits:
+            return {}
+        # Not per-line adjacency: every label comes first, then the values.
+        tail = text[hits[-1].end():]
+        values = _LIMIT_VALUE.findall(tail)
+        labels = [m.group(0) for m in hits]
+        return dict(zip(labels, values)) if values else {}
+    except Exception:
+        return {}
+
+
 def parse_appt(html: str) -> dict:
     """Enrollment Dates result page: term name + enrollment windows + unit limits."""
     soup = BeautifulSoup(html, "html.parser")
@@ -322,10 +382,7 @@ def parse_appt(html: str) -> dict:
             appts.append({"session": "Regular Academic Session",
                           "begins": lines[i + 1], "begin_time": lines[i + 2],
                           "ends": lines[i + 3], "end_time": lines[i + 4]})
-    limits = {}
-    for m2 in re.finditer(r"(Max Total Units|Min Total Units)\s*\n\s*([\d.]+)", text):
-        limits[m2.group(1)] = m2.group(2)
-    return {"term": term, "appointments": appts, "limits": limits}
+    return {"term": term, "appointments": appts, "limits": _parse_appt_limits(soup, text)}
 
 
 def parse_exam(html: str) -> list[dict]:

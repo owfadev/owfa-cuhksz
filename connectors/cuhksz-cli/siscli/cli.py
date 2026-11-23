@@ -172,16 +172,37 @@ def _section_order(groups: dict[str, list[dict]]) -> list[str]:
     return order
 
 
-def _course_header(course: dict, all_sections: bool) -> str:
+def _course_header(course: dict, all_sections: bool, capped: bool = False) -> str:
     """Header carrying the section count and the completeness signal."""
     count = _plural(len(course["sections"]), "section")
     if course.get("sections_expanded"):
         return f"{course['course']}  — {count} (all)"
     if not course.get("sections_complete", True):
-        why = ("expansion failed; first 3 shown" if all_sections
-               else "first 3 shown; --all-sections to expand")
+        if capped:
+            why = "expansion capped; first 3 shown"
+        else:
+            why = ("expansion failed; first 3 shown" if all_sections
+                   else "first 3 shown; --all-sections to expand")
         return f"{course['course']}  — {count} ({why})"
     return f"{course['course']}  — {count}"
+
+
+def _capped_course_ids(data: dict) -> set[int]:
+    """Courses left at the first-3 view by the expansion cap, not by a failure.
+
+    Only reachable when more courses carry a "View All Sections" action than
+    `CLASS_SEARCH_MAX_EXPANSIONS`. Attempted expansions either succeed
+    (`sections_expanded`) or record an `expansion_failed` note, so the courses
+    still incomplete and unnamed by such a note were never attempted.
+    """
+    notes = data.get("notes", [])
+    if not any(n.get("kind") == "expansion_cap" for n in notes):
+        return set()
+    failed = {n.get("course") for n in notes if n.get("kind") == "expansion_failed"}
+    return {id(c) for c in data["courses"]
+            if not c.get("sections_complete", True)
+            and not c.get("sections_expanded")
+            and c["course"] not in failed}
 
 
 def cmd_search(sis: Sis, args) -> int:
@@ -202,9 +223,11 @@ def cmd_search(sis: Sis, args) -> int:
     for note in data.get("notes", []):
         subject = f"{note['course']}: " if note.get("course") else ""
         print(f"[note] {subject}{note.get('detail', note.get('kind', ''))}")
+    capped = _capped_course_ids(data)
     for course in data["courses"]:
         print("")
-        print(_course_header(course, bool(data.get("all_sections"))))
+        print(_course_header(course, bool(data.get("all_sections")),
+                             capped=id(course) in capped))
         groups = _section_groups(course["sections"])
         if len(groups) > 1:
             for section_type in _section_order(groups):
@@ -251,8 +274,16 @@ def cmd_appt(sis: Sis, args) -> int:
     print(f"[{data['term']}] enrollment windows")
     for a in data["appointments"]:
         print(f"  {a['session']}: {a['begins']} {a['begin_time']} ~ {a['ends']} {a['end_time']}")
-    for k, v in data["limits"].items():
-        print(f"  {k}: {v}")
+    limits = data["limits"]
+    # Max first, then Min: Max is the term cap that blocks registration.
+    for k in ("Max Total Units", "Min Total Units"):
+        if k in limits:
+            print(f"  {k}: {limits[k]}")
+    for k, v in limits.items():  # forward-compatible: never drop an unknown key
+        if k not in ("Max Total Units", "Min Total Units"):
+            print(f"  {k}: {v}")
+    if "Max Total Units" in limits:
+        print("  (Max Total Units is the term cap — SIS refuses adds beyond it)")
     if not data["appointments"]:
         print(f"(No enrollment-window info for this term; available terms: {', '.join(data['terms_available'])})")
     return 0
@@ -380,8 +411,8 @@ def main(argv=None) -> int:
         p = sub.add_parser(comp, help=label)
         p.add_argument("--format", choices=["text", "json"], default="text")
         if comp != "history":
-            p.add_argument("--term", help="term label substring (defaults to the page's newest term; "
-                                          "e.g. '2026-27 Term 2')")
+            p.add_argument("--term", help="term label substring or strm code (defaults to the page's newest term; "
+                                          "e.g. '2026-27 Term 2' or 2620)")
 
     p = sub.add_parser("center", help="student center page (text summary)")
     p.add_argument("--format", choices=["text", "json"], default="text")
