@@ -29,7 +29,11 @@ _LIMIT_VALUE = re.compile(r"\d+(?:\.\d+)?")
 
 
 def parse_terms(html: str) -> list[dict]:
-    """Term list from the term search page: radio idx → term name (the page is reverse-ordered, newest first)."""
+    """Term list from the term search page: radio idx → term name.
+
+    Page order is component-dependent (grades lists newest first; appt/exam
+    list oldest first), so callers must order by label — never by position.
+    """
     soup = BeautifulSoup(html, "html.parser")
     out: list[dict] = []
     seen: set[str] = set()
@@ -114,7 +118,8 @@ _TERM_DROPDOWN_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Sessi
 # PeopleSoft strm derivation from the same label: <yy><term digit><0>, e.g.
 # 2026-27 Term 2 → 2620 (verified against the Class Search dropdown). The
 # third position is the session digit: Term 1 → 1, Term 2 → 2, Summer → 5
-# (live dropdown: 2025-26 Summer = 2550, 2026-27 Summer = 2650).
+# (live dropdown: 2025-26 Summer = 2550, 2026-27 Summer = 2650). The same
+# capture supplies `term_sort_key`, the chronological label ordering.
 _TERM_STRM_LABEL = re.compile(r"^(\d{4})-\d{2}\s+(?:Term\s+(\d)|Summer Session)", re.I)
 
 
@@ -151,22 +156,46 @@ def match_terms(terms: list[dict], query: str) -> list[dict]:
     return [r for r in terms if query.lower() in r["label"].lower()]
 
 
-def default_term(terms: list[dict], year: int | None = None) -> dict | None:
-    """Newest term that is not in the future.
+def term_sort_key(label: str) -> tuple[int, int] | None:
+    """Chronological ordering key for a term label: (start year, session digit).
 
-    The class-search dropdown runs to placeholder years far ahead (2035-36
-    today), so "the last option" is useless as a default: pick the newest
-    label whose start year is not after the current year.
+    Term 1 < Term 2 < Summer within a year (the session digit is 1/2/5), so a
+    plain max() over these keys is "newest" regardless of page order.
+    """
+    m = _TERM_STRM_LABEL.match(label)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2) or 5)
+
+
+def _term_label(row: dict) -> str:
+    """Term label from either row shape: class-search `label` / term-query `term`."""
+    return row.get("label") or row.get("term") or ""
+
+
+def default_term(terms: list[dict], year: int | None = None) -> dict | None:
+    """Newest term that is not in the future, ordered by label — never page order.
+
+    Accepts both shapes: the class-search dropdown (`label`/`strm`) and the
+    term-query radios (`term`/`idx`). The dropdown runs to placeholder years far
+    ahead (2035-36 today), so "the last option" is useless as a default: pick
+    the newest label whose start year is not after the current year (fallback:
+    newest overall). The term-query pages list real terms only and their radios
+    may be oldest-first (`sis appt`/`exam`), which is why ordering by label —
+    not position — is the rule for every caller.
     """
     if not terms:
         return None
     y = year if year is not None else _today().year
-    candidates = []
+    dated = []
     for r in terms:
-        m = _TERM_DROPDOWN_LABEL.match(r["label"])
-        if m and int(m.group(1)) <= y:
-            candidates.append(r)
-    return candidates[-1] if candidates else terms[-1]
+        key = term_sort_key(_term_label(r))
+        if key is not None:
+            dated.append((key, r))
+    if not dated:  # labels unparseable: keep the old page-order fallback
+        return terms[-1]
+    candidates = [kr for kr in dated if kr[0][0] <= y]
+    return max(candidates or dated, key=lambda kr: kr[0])[1]
 
 
 def term_candidates(hits: list[dict], today: date | None = None,

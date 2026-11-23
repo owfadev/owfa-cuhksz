@@ -434,6 +434,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0]["kind"], "expansion_failed")
         self.assertEqual(notes[0]["course"], "AAA 1000 - Alpha")
+        self.assertEqual(notes[0]["occurrence"], 0)  # row identity, not just title
         self.assertIn("kept", notes[0]["detail"])
 
     def test_expansion_cap_is_respected_and_noted(self):

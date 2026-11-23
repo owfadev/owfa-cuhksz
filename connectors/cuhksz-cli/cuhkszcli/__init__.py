@@ -21,4 +21,4 @@ credentials and sessions live only in the machine substrate, never in any
 repository.
 """
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"

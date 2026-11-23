@@ -14,6 +14,7 @@ import unittest
 from unittest.mock import patch
 
 from siscli import cli, parser
+from siscli.api import Sis
 
 # Live-shaped page (names/ids kept, no personal data): a layout wrapper table
 # contains the appointment grid and, below it, the limits grid. Nesting matters:
@@ -79,6 +80,26 @@ APPT_PAGE = """<!DOCTYPE html><html><body>
 
 EXPECTED_LIMITS = {"Max Total Units": "18.00", "Min Total Units": "9.00"}
 
+# Trap: an OUTER table also carries the text "Enrollment Limits" and its own
+# (wrong) Max/Min numbers, with the real grid nested inside it. A parser that
+# takes the first table containing the text — instead of the innermost one —
+# reads the outer cells' document order (18/9 then 99/1) and returns the last
+# pair, 99.00 / 1.00, failing the assertion below.
+NESTED_LIMITS_PAGE = """<!DOCTYPE html><html><body>
+<table id="outer-summary">
+  <tr><td colspan="2">Enrollment Limits (term summary)</td></tr>
+  <tr><td colspan="2">
+    <table id="inner-real-grid">
+      <tr><td colspan="2">Term Enrollment Limits</td></tr>
+      <tr><td>Max Total Units</td><td>18.00</td></tr>
+      <tr><td>Min Total Units</td><td>9.00</td></tr>
+    </table>
+  </td></tr>
+  <tr><td>Max Total Units</td><td>99.00</td></tr>
+  <tr><td>Min Total Units</td><td>1.00</td></tr>
+</table>
+</body></html>"""
+
 # No limits table: labels on one line, values on the next. Adjacency must not
 # pair Min with 18.00; every label comes before every value.
 FALLBACK_PAGE = """<html><body>
@@ -104,6 +125,11 @@ class ParseApptTests(unittest.TestCase):
         # Max first (the old regex produced only {"Min Total Units": "18.00"}).
         self.assertEqual(list(data["limits"]), ["Max Total Units", "Min Total Units"])
 
+    def test_innermost_limits_table_wins_over_an_outer_table_with_limits_text(self):
+        data = parser.parse_appt(NESTED_LIMITS_PAGE)
+        # An outer-table pick would read 99.00 / 1.00 instead.
+        self.assertEqual(data["limits"], EXPECTED_LIMITS)
+
     def test_term_and_appointment_rows_survive_the_table_parse(self):
         data = parser.parse_appt(APPT_PAGE)
         self.assertEqual(data["term"], "2026-27 Term 2")
@@ -126,11 +152,13 @@ class ParseApptTests(unittest.TestCase):
 class FakeApptSis:
     def __init__(self, data):
         self.data = data
+        self.terms = []
 
     def ensure_session(self):  # cli.main bootstraps the session before dispatch
         return True
 
     def appt(self, term):
+        self.terms.append(term)  # record what the CLI actually passed
         return self.data
 
 
@@ -146,14 +174,15 @@ APPT_DATA = {
 
 class ApptCliTests(unittest.TestCase):
     def run_cli(self, argv, data):
-        with patch.object(cli, "Sis", return_value=FakeApptSis(data)), \
+        sis = FakeApptSis(data)
+        with patch.object(cli, "Sis", return_value=sis), \
                 contextlib.redirect_stdout(io.StringIO()) as out, \
                 contextlib.redirect_stderr(io.StringIO()) as err:
             code = cli.main(argv)
-        return code, out.getvalue(), err.getvalue()
+        return code, out.getvalue(), err.getvalue(), sis
 
     def test_text_prints_max_first_then_min_with_a_short_cap_hint(self):
-        code, out, err = self.run_cli(["appt", "--term", "2026-27 Term 2"], APPT_DATA)
+        code, out, err, _sis = self.run_cli(["appt", "--term", "2026-27 Term 2"], APPT_DATA)
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
         self.assertIn("Max Total Units: 18.00", out)
@@ -162,11 +191,21 @@ class ApptCliTests(unittest.TestCase):
         self.assertIn("Max Total Units is the term cap", out)
 
     def test_json_keeps_the_existing_limits_dict_shape(self):
-        code, out, err = self.run_cli(["appt", "--format", "json"], APPT_DATA)
+        code, out, err, _sis = self.run_cli(["appt", "--format", "json"], APPT_DATA)
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertEqual(set(data), {"term", "appointments", "limits", "terms_available"})
         self.assertEqual(data["limits"], EXPECTED_LIMITS)
+
+    def test_term_flag_reaches_sis_appt(self):
+        code, _out, _err, sis = self.run_cli(["appt", "--term", "2026-27 Term 2"], APPT_DATA)
+        self.assertEqual(code, 0)
+        self.assertEqual(sis.terms, ["2026-27 Term 2"])
+
+    def test_no_term_passes_none_so_sis_resolves_the_default(self):
+        code, _out, _err, sis = self.run_cli(["appt", "--format", "json"], APPT_DATA)
+        self.assertEqual(code, 0)
+        self.assertEqual(sis.terms, [None])
 
 
 class CourseHeaderCappedTests(unittest.TestCase):
@@ -187,6 +226,18 @@ class CourseHeaderCappedTests(unittest.TestCase):
         data = {"courses": [expanded, failed, capped],
                 "notes": [{"kind": "expansion_cap", "cap": 1, "expandable": 3},
                           {"kind": "expansion_failed", "course": "BBB 2000 - Beta"}]}
+        self.assertEqual(cli._capped_course_ids(data), {id(capped)})
+
+    def test_same_title_courses_are_matched_by_occurrence(self):
+        failed = {"course": "DUP 1000 - Same", "sections_complete": False,
+                  "sections_expanded": False}
+        capped = {"course": "DUP 1000 - Same", "sections_complete": False,
+                  "sections_expanded": False}
+        data = {"courses": [failed, capped],
+                "notes": [{"kind": "expansion_cap", "cap": 1, "expandable": 2},
+                          {"kind": "expansion_failed", "course": "DUP 1000 - Same",
+                           "occurrence": 0}]}
+        # Keying by title alone would drop the never-attempted duplicate too.
         self.assertEqual(cli._capped_course_ids(data), {id(capped)})
 
 
@@ -223,6 +274,36 @@ class TermStrmTests(unittest.TestCase):
             self.assertEqual(result["term"], expected_term)
             self.assertEqual(sis.transport.idx, expected_idx)
 
+    def test_default_term_orders_by_label_not_page_position(self):
+        terms = [{"idx": "1", "term": "2025-26 Term 1"},
+                 {"idx": "2", "term": "2026-27 Term 2"},   # newest, in the middle
+                 {"idx": "3", "term": "2025-26 Term 2"},
+                 {"idx": "4", "term": "2026-27 Term 1"}]
+        self.assertEqual(parser.default_term(terms, year=2026)["term"], "2026-27 Term 2")
+
+    def test_explicit_substring_keeps_the_first_page_order_match(self):
+        from siscli.api import Sis
+
+        class FakeTermTransport:
+            def __init__(self):
+                self.idx = None
+
+            def get_content(self, comp, nav):
+                return TERM_PAGE
+
+            def submit_search(self, html, idx):
+                self.idx = idx
+                return "<html><body>result</body></html>"
+
+        sis = Sis.__new__(Sis)
+        sis.cfg = {}
+        sis.transport = FakeTermTransport()
+        # "Term 2" also matches 2026-27 Term 2 (idx 4), but an explicit query
+        # keeps the first page-order hit — unchanged from 0.4.2.
+        result = sis.term_query("appt", "Term 2")
+        self.assertEqual(result["term"], "2025-26 Term 2")
+        self.assertEqual(sis.transport.idx, "3")
+
 
 TERM_PAGE = """<html><body><table>
 <tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='1'></td>
@@ -234,6 +315,60 @@ TERM_PAGE = """<html><body><table>
 <tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='4'></td>
     <td>Academic 2026-27 Term 2 session</td></tr>
 </table></body></html>"""
+
+
+# The term-query pages can be oldest-first (live `appt`/`exam`; `grades` is
+# newest-first). The default must come from label ordering, never position.
+TERMS_OLDEST_FIRST = ["2025-26 Term 1", "2025-26 Term 2", "2025-26 Summer Session",
+                      "2026-27 Term 1", "2026-27 Term 2"]
+TERM_LABEL_BY_IDX = {str(i): label for i, label in enumerate(TERMS_OLDEST_FIRST, 1)}
+TERM_PAGE_OLDEST_FIRST = ("<html><body><table>" + "".join(
+    f"<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='{i}'></td>"
+    f"<td>Academic {label} session</td></tr>"
+    for i, label in enumerate(TERMS_OLDEST_FIRST, 1)) + "</table></body></html>")
+
+
+class FakeTermResultTransport:
+    """Term page + a result page echoing the selected label (no network)."""
+
+    def __init__(self, page, labels):
+        self.page = page
+        self.labels = labels
+        self.idx = None
+
+    def load_session(self):  # cli.main bootstraps the session before dispatch
+        return True
+
+    def get_content(self, comp, nav):
+        return self.page
+
+    def submit_search(self, html, idx):
+        self.idx = idx
+        return f"<html><body><div>Term {self.labels[idx]}</div></body></html>"
+
+
+class DefaultTermCliTests(unittest.TestCase):
+    def run_cli(self, argv):
+        transport = FakeTermResultTransport(TERM_PAGE_OLDEST_FIRST, TERM_LABEL_BY_IDX)
+        sis = Sis.__new__(Sis)
+        sis.cfg = {}
+        sis.transport = transport
+        with patch.object(cli, "Sis", return_value=sis), \
+                contextlib.redirect_stdout(io.StringIO()) as out, \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            code = cli.main(argv)
+        return code, out.getvalue(), err.getvalue(), transport
+
+    def test_no_term_on_appt_exam_grades_resolves_the_newest_label(self):
+        for cmd in ("appt", "exam", "grades"):
+            with self.subTest(cmd=cmd):
+                code, out, err, transport = self.run_cli([cmd, "--format", "json"])
+                self.assertEqual(code, 0)
+                self.assertEqual(err, "")
+                self.assertEqual(json.loads(out)["term"], "2026-27 Term 2")
+                # Oldest-first page: the newest term is the LAST row (idx 5),
+                # not the first (idx 1) that page-order picking would take.
+                self.assertEqual(transport.idx, "5")
 
 
 if __name__ == "__main__":
