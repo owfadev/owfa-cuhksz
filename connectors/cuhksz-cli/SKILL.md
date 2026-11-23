@@ -80,7 +80,7 @@ The course argument accepts a course id (`_18027_1`), a course code, or a name s
 |---|---|
 | Weekly schedule + day-of-week timetable | `cuhksz-cli sis schedule --days --format text` |
 | Course catalog / sections & times for a term | `cuhksz-cli sis search [--term '2026-27 Term 2'] --subject AIE [--catalog 1904] [--contains] [--all-seats] [--all-sections]` (read-only; open sections by default; `--all-sections` expands the first-3 view) |
-| My grades for a term | `cuhksz-cli sis grades [--term '2026-27 Term 2']` (default = the newest term **by label ordering**, not page order) |
+| My grades for a term | `cuhksz-cli sis grades [--term '2026-27 Term 2']` (default = the newest term **by label ordering**, not page order, preferring a non-Summer term) |
 | Full course history | `cuhksz-cli sis history` |
 | Enrollment dates / registration window | `cuhksz-cli sis appt [--term 'Summer']` — limits: `Max Total Units` = term cap (adds beyond it are refused), `Min Total Units` = floor; `--term` takes a strm code or label substring (ambiguous substrings are refused with candidates by `search`) |
 | Exam schedule | `cuhksz-cli sis exam` (empty when not yet published) |

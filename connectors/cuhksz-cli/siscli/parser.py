@@ -200,12 +200,24 @@ def default_term(terms: list[dict], year: int | None = None) -> dict | None:
 
 
 def newest_term(terms: list[dict], year: int | None = None) -> dict | None:
-    """Term-query default (grades/appt/exam): newest label by academic-year/session order.
+    """Term-query default (grades/appt/exam): newest non-Summer term at or before the current year.
 
     Those radios are ordered per component (`grades` newest-first, `appt`/`exam`
     oldest-first) and list real terms only, so position is never trusted: order
-    by (start year, session digit) and take the max whose start year is not
-    after the current year (fallback: newest overall).
+    by (start year, session digit).
+
+    Among rows whose start year is not after the current year, the newest
+    **non-Summer** term wins (chronological max over Term 1/2). Summer is
+    deliberately deprioritised: the guard is future-facing — once the radios
+    gain the current academic year's Summer row (Class Search already lists
+    `2650 2026-27 Summer Session`, and the radios are expected to follow), a
+    plain chronological max would resolve Summer, a session that has not
+    started and is not the registration target. The default must stay on the
+    year's Term 2. Summer is only used when every ≤current-year candidate is
+    Summer (e.g. a Summer-only list), and when no candidate is ≤ current year
+    the fallback is still the newest row overall. Page order is never a
+    fallback here (it is component-dependent); only unparseable labels fall
+    back to page order.
     """
     if not terms:
         return None
@@ -218,7 +230,10 @@ def newest_term(terms: list[dict], year: int | None = None) -> dict | None:
     if not dated:  # labels unparseable: fall back to page order
         return terms[-1]
     candidates = [kr for kr in dated if kr[0][0] <= y]
-    return max(candidates or dated, key=lambda kr: kr[0])[1]
+    if not candidates:  # nothing at or before the current year: newest overall
+        return max(dated, key=lambda kr: kr[0])[1]
+    non_summer = [kr for kr in candidates if kr[0][1] != 5]  # 5 = Summer Session
+    return max(non_summer or candidates, key=lambda kr: kr[0])[1]
 
 
 def term_candidates(hits: list[dict], today: date | None = None,
