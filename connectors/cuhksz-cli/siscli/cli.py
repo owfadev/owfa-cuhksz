@@ -139,6 +139,28 @@ def cmd_schedule(sis: Sis, args) -> int:
     return 0
 
 
+def cmd_search(sis: Sis, args) -> int:
+    data = sis.class_search(term=args.term, subject=args.subject, catalog=args.catalog,
+                            career=args.career, open_only=not args.all_seats,
+                            contains=args.contains)
+    if args.format == "json":
+        print(_fmt(data))
+        return 0
+    if data.get("notice"):
+        print(f"[notice] {data['notice']}")
+        return 0
+    print(f"[{data['term']} / {data['strm']}] subject={data['subject'] or '-'} "
+          f"catalog={data['catalog'] or '-'} — {len(data['courses'])} course(s)")
+    for course in data["courses"]:
+        print("")
+        print(course["course"])
+        for sec in course["sections"]:
+            when = " / ".join(sec["times"]) or "-"
+            print(f"  {sec['section']}  {when}  {sec['room'] or ''}  "
+                  f"{sec['instructor'] or ''}".rstrip())
+    return 0
+
+
 def cmd_grades(sis: Sis, args) -> int:
     data = sis.grades(args.term)
     if args.format == "json":
@@ -279,6 +301,16 @@ def main(argv=None) -> int:
     p.add_argument("--format", choices=["text", "json"], default="text")
     p.add_argument("--days", action="store_true", help="include the timetable with weekday/session attribution")
 
+    # Read-only class search (course catalog + section times): advisory only.
+    p = sub.add_parser("search", help="class search: list courses and their sections/times for a term (read-only)")
+    p.add_argument("--term", help="term label substring or strm code (defaults to the newest term)")
+    p.add_argument("--subject", help="subject code (e.g. AIE, CSC, ENG)")
+    p.add_argument("--catalog", help="catalog number (e.g. 1904); combine with --subject")
+    p.add_argument("--contains", action="store_true", help="match the catalog number by contains instead of exact")
+    p.add_argument("--career", help="academic career (leave empty: SIS returns 0 results for UGCU)")
+    p.add_argument("--all-seats", action="store_true", help="include closed/full sections (default: open only)")
+    p.add_argument("--format", choices=["text", "json"], default="text")
+
     for comp, label in [
             ("grades", "view my grades (per term; --term substring optional)"),
             ("appt", "enrollment dates (--term substring optional)"),
@@ -316,11 +348,13 @@ def main(argv=None) -> int:
 
     handlers = {"status": cmd_status, "login": cmd_login, "logout": cmd_logout,
                 "accounts": cmd_accounts, "default": cmd_default,
-                "schedule": cmd_schedule, "grades": cmd_grades, "history": cmd_history,
+                "schedule": cmd_schedule, "search": cmd_search,
+                "grades": cmd_grades, "history": cmd_history,
                 "appt": cmd_appt, "exam": cmd_exam, "raw": cmd_raw,
                 "center": cmd_text_component, "assignments": cmd_text_component,
                 "transcript": cmd_transcript, "identity": cmd_identity, "dpr": cmd_dpr}
 
+    # `search` falls into the session bootstrap below (it needs a live session).
     if args.cmd not in ("login", "logout", "status", "accounts", "default"):
         sis.ensure_session()
     if args.cmd == "raw" and args.file:

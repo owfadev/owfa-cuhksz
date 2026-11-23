@@ -31,6 +31,41 @@ class DeadSession(TransportError):
     """The response is a PeopleSoft login shell (session expired or never established)."""
 
 
+# PeopleSoft AJAX endpoints only answer with component payloads when the request
+# is marked as XMLHttpRequest (verified for Class Search, 2026-11-23).
+AJAX_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
+
+
+def extract_win0_form(html: str) -> tuple[str, dict[str, str]]:
+    """Snapshot the page's `win0` form as (action, defensible field dict).
+
+    Checkboxes/radios contribute only when checked; a select contributes its
+    selected option (or the first option when none is marked); submit/button/
+    image/reset controls are skipped because activation is expressed through
+    `ICAction`. This is the shared baseline for query-flow POSTs — callers add
+    their own protocol fields on top.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    form = soup.find("form", attrs={"name": "win0"})
+    if form is None or not form.get("action"):
+        raise TransportError("win0 form not found (page structure changed)")
+    fields: dict[str, str] = {}
+    for inp in form.find_all("input"):
+        name = inp.get("name")
+        if not name or inp.get("type") in ("submit", "button", "image", "reset"):
+            continue
+        if inp.get("type") in ("checkbox", "radio") and not inp.has_attr("checked"):
+            continue
+        fields[name] = inp.get("value") or ""
+    for sel in form.find_all("select"):
+        name = sel.get("name")
+        if not name:
+            continue
+        opt = sel.find("option", selected=True) or sel.find("option")
+        fields[name] = (opt.get("value") or "") if opt else ""
+    return form["action"], fields
+
+
 class Transport:
     def __init__(self, relogin=None):
         self._sess = creq.Session(impersonate=config.IMPERSONATE)
@@ -209,6 +244,28 @@ class Transport:
         self.save_session()
         if self.is_signon_shell(r.text):
             raise DeadSession("Session dead after term submission")
+        return r.text
+
+    # ---- AJAX query POST (PeopleSoft component query flows) ----
+    def post_ajax(self, action_url: str, fields: dict[str, str],
+                  *, timeout: int | None = None) -> str:
+        """POST an AJAX field set to the win0 form action and return the raw response text.
+
+        Used by the read-only Class Search query flow: the request must carry
+        `X-Requested-With: XMLHttpRequest`, the session is written through, and
+        a login shell raises DeadSession. No state-changing action is ever
+        passed here by shipped commands.
+        """
+        r = self._sess.post(action_url, data=fields, headers=AJAX_HEADERS,
+                            allow_redirects=True,
+                            timeout=timeout or config.REQUEST_TIMEOUT)
+        self.save_session()
+        d = config.debug_dir()
+        if d:
+            n = len(list(Path(d).glob("ajax-*.txt"))) + 1
+            (Path(d) / f"ajax-{n:02d}.txt").write_text(r.text, encoding="utf-8", errors="replace")
+        if self.is_signon_shell(r.text):
+            raise DeadSession("Session dead after AJAX submission")
         return r.text
 
     def download(self, url: str, dest: Path) -> int:

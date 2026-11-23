@@ -56,6 +56,10 @@ Full command tables and reverse-engineering notes live in [docs/bb.md](docs/bb.m
 
 Both `status` commands are **offline tri-state probes** (zero network, zero login): bb reports `session_file` / `session_valid` (local cookie liveness) / `auto_relogin` (`available` | `blocked (no stored credentials)` | `blocked (no default account)`); sis reports the same state/capability split as `session` / `relogin` plus unknown `reachable`. A stale session with re-login capability available is not an error — only `blocked` states need manual `login`. Full contracts: [docs/bb.md](docs/bb.md#status-contract-tri-state-offline), [docs/sis.md](docs/sis.md#status-contract-031).
 
+## Changelog
+
+- **0.4.0** (2026-11-23): new read-only `cuhksz-cli sis search` — Class Search lists a term's courses with their sections, meeting times, rooms and instructors (two-step AJAX query on `SA_LEARNER_SERVICES.CLASS_SEARCH.GBL`; open sections only by default; advisory only — no cart, no enrollment, no state change). Non-breaking: no existing command, flag or output shape changes; plus the new `sis-course` member plugin and its skill live in the package repo.
+
 ## Layout
 
 - `cuhkszcli/` — dispatcher (entry layer, no logic of its own) + `home.py` (substrate resolution / `home` commands' data layer)

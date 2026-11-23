@@ -6,9 +6,13 @@ Parsing anchors all come from live page structures verified on 2026-10-05
 
 from __future__ import annotations
 
+from datetime import date
+
 import re
 
 from bs4 import BeautifulSoup
+
+from . import config
 
 _COURSE_CODE = re.compile(r"^[A-Z]{2,4}\s\d{3,4}\s-\s[A-Z]\d{2}")
 _COURSE_CODE_TIGHT = re.compile(r"^[A-Z]{2,4}\s\d{3,4}$")
@@ -33,6 +37,148 @@ def parse_terms(html: str) -> list[dict]:
         seen.add(label)
         out.append({"idx": rad.get("value"), "term": label})
     return out
+
+
+def class_search_terms(html: str) -> list[dict]:
+    """Term dropdown on the Class Search page: [{"strm", "label"}] (empty option excluded).
+
+    The option order is the page order (oldest → newest), so the last entry is
+    the newest term; labels look like "2026-27 Term 2" and strm like "2620".
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    sel = soup.find("select", {"name": config.CLASS_SEARCH_TERM_FIELD})
+    if sel is None:
+        return []
+    out = []
+    for opt in sel.find_all("option"):
+        strm = (opt.get("value") or "").strip()
+        label = opt.get_text(" ", strip=True)
+        if strm:
+            out.append({"strm": strm, "label": label})
+    return out
+
+
+_CDATA_BLOCK = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.S)
+
+# The step-1 AJAX response is XML/JS, not an HTML form: PeopleSoft echoes the
+# component state as assignments (`oDoc.win0.ICStateNum.value=218;`) inside a
+# GENSCRIPT CDATA block, and `ICSID` usually is not echoed at all. A plain
+# `<input>` scan therefore sees nothing on a live response (verified 2026-11-23).
+_IC_JS_STATE = (
+    ("ICStateNum", re.compile(r"ICStateNum\s*\.\s*value\s*=\s*['\"]?(\d+)")),
+    ("ICResubmit", re.compile(r"ICResubmit\s*\.\s*value\s*=\s*['\"]?(\d+)")),
+    ("ICSID", re.compile(r"ICSID\s*\.\s*value\s*=\s*['\"]([^'\"]+)")),
+)
+
+
+def ic_state_fields(payload: str) -> dict[str, str]:
+    """Component state echoed by an AJAX response: ICStateNum / ICResubmit / ICSID.
+
+    Class Search step 2 copies back whatever the step-1 response carries; a
+    field that is not echoed stays absent, so the caller keeps the page value
+    (`ICSID` normally is). Both shapes are supported: the JS assignments that
+    live responses use, and `<input>` elements inside CDATA-embedded HTML.
+    """
+    out: dict[str, str] = {}
+    html = "".join(_CDATA_BLOCK.findall(payload)) or payload
+    if html.lstrip().startswith("<?"):
+        html = ""  # bare XML wrapper without CDATA: nothing to scan as HTML
+    if html:
+        soup = BeautifulSoup(html, "html.parser")
+        for inp in soup.find_all("input"):
+            name = inp.get("name")
+            if name in ("ICStateNum", "ICSID", "ICResubmit"):
+                out[name] = inp.get("value") or ""
+    for name, rx in _IC_JS_STATE:
+        if name in out:
+            continue
+        m = rx.search(payload)
+        if m:
+            out[name] = m.group(1)
+    return out
+
+
+_TERM_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Session)", re.I)
+
+
+def term_year(label: str) -> int | None:
+    """Start year of a term label ("2026-27 Term 2" → 2026); None when unparseable."""
+    m = _TERM_LABEL.match(label)
+    return int(m.group(1)) if m else None
+
+
+def match_terms(terms: list[dict], query: str) -> list[dict]:
+    """Resolve a term query: an exact strm wins, otherwise every label substring hit."""
+    exact = [r for r in terms if r["strm"] == query]
+    if exact:
+        return exact
+    return [r for r in terms if query.lower() in r["label"].lower()]
+
+
+def default_term(terms: list[dict], year: int | None = None) -> dict | None:
+    """Newest term that is not in the future.
+
+    The class-search dropdown runs to placeholder years far ahead (2035-36
+    today), so "the last option" is useless as a default: pick the newest
+    label whose start year is not after the current year.
+    """
+    if not terms:
+        return None
+    y = year if year is not None else date.today().year
+    candidates = []
+    for r in terms:
+        m = _TERM_LABEL.match(r["label"])
+        if m and int(m.group(1)) <= y:
+            candidates.append(r)
+    return candidates[-1] if candidates else terms[-1]
+_CLASS_SEARCH_WARNING = re.compile(r"<PAGE[^>]*id=['\"]SSR_SS_WARNING['\"]", re.I)
+
+
+def parse_class_search(payload: str) -> dict:
+    """Class Search response → {"courses": [...], "notice": optional}.
+
+    The response is an XML wrapper (`<PAGE id='SSR_CLSRCH_RSLT'>`) whose real
+    HTML sits in CDATA blocks: concatenate them, then parse. Beyond ~50 classes
+    the server answers with an `SSR_SS_WARNING` page instead of results, which
+    is surfaced as a structured notice (no courses). Course headers are the
+    `win0divDERIVED_CLSRCH_DESCR200$…` divs; a section is a
+    `DERIVED_CLSRCH_SSR_CLASSNAME_LONG$…` element; meeting rows contribute
+    `MTG_DAYTIME` times (1–2 per section), the first `MTG_ROOM`/`MTG_INSTR`.
+    """
+    if "over 50 classes" in payload or _CLASS_SEARCH_WARNING.search(payload):
+        return {"courses": [], "notice": (
+            "SIS refused the query because it matched more than "
+            f"{config.CLASS_SEARCH_MAX_CLASSES} classes; add a subject and/or "
+            "catalog number to narrow it (e.g. --subject AIE --catalog 1904) "
+            "and retry")}
+    html = "".join(_CDATA_BLOCK.findall(payload)) or payload
+    soup = BeautifulSoup(html, "html.parser")
+    courses: list[dict] = []
+    current: dict | None = None
+    section: dict | None = None
+    for el in soup.find_all(id=True):
+        eid = el.get("id") or ""
+        if (eid.startswith("win0divDERIVED_CLSRCH_DESCR200$")
+                or eid.startswith("DERIVED_CLSRCH_DESCR200$")):
+            text = el.get_text(" ", strip=True)
+            if text and (current is None or text != current["course"]):
+                current = {"course": text, "sections": []}
+                courses.append(current)
+                section = None
+        elif eid.startswith("DERIVED_CLSRCH_SSR_CLASSNAME_LONG$") and "span" not in eid:
+            text = el.get_text(" ", strip=True)
+            if current is not None and text:
+                section = {"section": text, "times": [], "room": None, "instructor": None}
+                current["sections"].append(section)
+        elif section is not None and eid.startswith("MTG_DAYTIME") and not eid.endswith("lbl"):
+            t = el.get_text(" ", strip=True)
+            if t and t not in section["times"]:
+                section["times"].append(t)
+        elif section is not None and eid.startswith("MTG_ROOM") and section["room"] is None:
+            section["room"] = el.get_text(" ", strip=True) or None
+        elif section is not None and eid.startswith("MTG_INSTR") and section["instructor"] is None:
+            section["instructor"] = el.get_text(" ", strip=True) or None
+    return {"courses": courses}
 
 
 def parse_grade_report(html: str) -> dict:

@@ -13,10 +13,11 @@ single substrate home, `$OWFA_HOME/connectors/cuhksz-cli/homes/<id>/`
 (`BB_CLI_HOME` / `SIS_CLI_HOME` remain explicit compatibility overrides).
 See the migration section of SKILL.md.
 
-Discipline: read-only — never issues any write request (the single
-deliberate exception, inherited from siscli, is the term-selection
-"Continue" POST on PeopleSoft search pages); credentials and sessions live
-only in the machine substrate, never in any repository.
+Discipline: read-only — never issues any write request (the deliberate
+exceptions, inherited from siscli, are query-only POSTs on PeopleSoft
+search pages: the term-selection "Continue" and the two-step Class
+Search AJAX flow); credentials and sessions live only in the machine
+substrate, never in any repository.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
