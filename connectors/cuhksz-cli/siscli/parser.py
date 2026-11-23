@@ -55,8 +55,10 @@ def parse_terms(html: str) -> list[dict]:
 def class_search_terms(html: str) -> list[dict]:
     """Term dropdown on the Class Search page: [{"strm", "label"}] (empty option excluded).
 
-    The option order is the page order (oldest → newest), so the last entry is
-    the newest term; labels look like "2026-27 Term 2" and strm like "2620".
+    The option order is the page order: grouped by academic year, and inside a
+    year Summer comes **before** Term 1/2 (live: 2650, 2610, 2620). So the last
+    entry is not necessarily the newest term — see `default_term` for the
+    default-selection rule. Labels look like "2026-27 Term 2", strm like "2620".
     """
     soup = BeautifulSoup(html, "html.parser")
     sel = soup.find("select", {"name": config.CLASS_SEARCH_TERM_FIELD})
@@ -174,15 +176,36 @@ def _term_label(row: dict) -> str:
 
 
 def default_term(terms: list[dict], year: int | None = None) -> dict | None:
-    """Newest term that is not in the future, ordered by label — never page order.
+    """Class Search default: the last listed term whose start year is not after the current year.
 
-    Accepts both shapes: the class-search dropdown (`label`/`strm`) and the
-    term-query radios (`term`/`idx`). The dropdown runs to placeholder years far
-    ahead (2035-36 today), so "the last option" is useless as a default: pick
-    the newest label whose start year is not after the current year (fallback:
-    newest overall). The term-query pages list real terms only and their radios
-    may be oldest-first (`sis appt`/`exam`), which is why ordering by label —
-    not position — is the rule for every caller.
+    Page order is deliberate here. The Class Search dropdown is grouped by
+    academic year and, inside each year, lists Summer **before** Term 1/2
+    (live: `2650 Summer`, `2610 Term 1`, `2620 Term 2`), while placeholder
+    years run far ahead (2035-36 today). Taking the last surviving row therefore
+    lands on the current academic year's Term 2 — the term registrations target.
+    A chronological max would instead pick the future Summer (an unpopulated
+    term), which is why the two defaults are separate functions: see
+    `newest_term` for the grades/appt/exam radios, whose order differs per
+    component. Accepts both row shapes via `_term_label`.
+    """
+    if not terms:
+        return None
+    y = year if year is not None else _today().year
+    candidates = []
+    for r in terms:
+        key = term_sort_key(_term_label(r))
+        if key is not None and key[0] <= y:
+            candidates.append(r)
+    return candidates[-1] if candidates else terms[-1]
+
+
+def newest_term(terms: list[dict], year: int | None = None) -> dict | None:
+    """Term-query default (grades/appt/exam): newest label by academic-year/session order.
+
+    Those radios are ordered per component (`grades` newest-first, `appt`/`exam`
+    oldest-first) and list real terms only, so position is never trusted: order
+    by (start year, session digit) and take the max whose start year is not
+    after the current year (fallback: newest overall).
     """
     if not terms:
         return None
@@ -192,7 +215,7 @@ def default_term(terms: list[dict], year: int | None = None) -> dict | None:
         key = term_sort_key(_term_label(r))
         if key is not None:
             dated.append((key, r))
-    if not dated:  # labels unparseable: keep the old page-order fallback
+    if not dated:  # labels unparseable: fall back to page order
         return terms[-1]
     candidates = [kr for kr in dated if kr[0][0] <= y]
     return max(candidates or dated, key=lambda kr: kr[0])[1]

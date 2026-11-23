@@ -251,8 +251,6 @@ class TermStrmTests(unittest.TestCase):
         self.assertIsNone(parser.term_strm("not a term"))
 
     def test_term_query_accepts_a_strm_code_or_a_label(self):
-        from siscli.api import Sis
-
         class FakeTermTransport:
             def __init__(self):
                 self.idx = None
@@ -265,8 +263,8 @@ class TermStrmTests(unittest.TestCase):
                 return "<html><body>result</body></html>"
 
         for query, expected_idx, expected_term in (
-                ("2620", "4", "2026-27 Term 2"),
-                ("2026-27 Term 1", "1", "2026-27 Term 1")):
+                ("2620", "3", "2026-27 Term 2"),
+                ("2026-27 Term 1", "0", "2026-27 Term 1")):
             sis = Sis.__new__(Sis)
             sis.cfg = {}
             sis.transport = FakeTermTransport()
@@ -274,16 +272,16 @@ class TermStrmTests(unittest.TestCase):
             self.assertEqual(result["term"], expected_term)
             self.assertEqual(sis.transport.idx, expected_idx)
 
-    def test_default_term_orders_by_label_not_page_position(self):
-        terms = [{"idx": "1", "term": "2025-26 Term 1"},
-                 {"idx": "2", "term": "2026-27 Term 2"},   # newest, in the middle
-                 {"idx": "3", "term": "2025-26 Term 2"},
-                 {"idx": "4", "term": "2026-27 Term 1"}]
-        self.assertEqual(parser.default_term(terms, year=2026)["term"], "2026-27 Term 2")
+    def test_newest_term_orders_by_label_not_page_position(self):
+        # Live radios are 0-based; the newest term sits in the middle here so a
+        # page-order pick (terms[0] or terms[-1]) would fail.
+        terms = [{"idx": "0", "term": "2025-26 Term 1"},
+                 {"idx": "1", "term": "2026-27 Term 2"},   # newest, in the middle
+                 {"idx": "2", "term": "2025-26 Term 2"},
+                 {"idx": "3", "term": "2026-27 Term 1"}]
+        self.assertEqual(parser.newest_term(terms, year=2026)["term"], "2026-27 Term 2")
 
     def test_explicit_substring_keeps_the_first_page_order_match(self):
-        from siscli.api import Sis
-
         class FakeTermTransport:
             def __init__(self):
                 self.idx = None
@@ -302,17 +300,17 @@ class TermStrmTests(unittest.TestCase):
         # keeps the first page-order hit — unchanged from 0.4.2.
         result = sis.term_query("appt", "Term 2")
         self.assertEqual(result["term"], "2025-26 Term 2")
-        self.assertEqual(sis.transport.idx, "3")
+        self.assertEqual(sis.transport.idx, "2")
 
 
 TERM_PAGE = """<html><body><table>
-<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='1'></td>
+<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='0'></td>
     <td>Academic 2026-27 Term 1 session</td></tr>
-<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='2'></td>
+<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='1'></td>
     <td>Academic 2025-26 Term 1 session</td></tr>
-<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='3'></td>
+<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='2'></td>
     <td>Academic 2025-26 Term 2 session</td></tr>
-<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='4'></td>
+<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='3'></td>
     <td>Academic 2026-27 Term 2 session</td></tr>
 </table></body></html>"""
 
@@ -321,11 +319,11 @@ TERM_PAGE = """<html><body><table>
 # newest-first). The default must come from label ordering, never position.
 TERMS_OLDEST_FIRST = ["2025-26 Term 1", "2025-26 Term 2", "2025-26 Summer Session",
                       "2026-27 Term 1", "2026-27 Term 2"]
-TERM_LABEL_BY_IDX = {str(i): label for i, label in enumerate(TERMS_OLDEST_FIRST, 1)}
+TERM_LABEL_BY_IDX = {str(i): label for i, label in enumerate(TERMS_OLDEST_FIRST)}  # live radios are 0-based
 TERM_PAGE_OLDEST_FIRST = ("<html><body><table>" + "".join(
     f"<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='{i}'></td>"
     f"<td>Academic {label} session</td></tr>"
-    for i, label in enumerate(TERMS_OLDEST_FIRST, 1)) + "</table></body></html>")
+    for i, label in enumerate(TERMS_OLDEST_FIRST)) + "</table></body></html>")
 
 
 class FakeTermResultTransport:
@@ -366,9 +364,9 @@ class DefaultTermCliTests(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertEqual(err, "")
                 self.assertEqual(json.loads(out)["term"], "2026-27 Term 2")
-                # Oldest-first page: the newest term is the LAST row (idx 5),
-                # not the first (idx 1) that page-order picking would take.
-                self.assertEqual(transport.idx, "5")
+                # Oldest-first page: the newest term is the LAST row (idx 4),
+                # not the first (idx 0) that page-order picking would take.
+                self.assertEqual(transport.idx, "4")
 
 
 if __name__ == "__main__":

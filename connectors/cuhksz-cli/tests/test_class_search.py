@@ -44,10 +44,14 @@ oDoc.win0.ICStateNum.value=218;
 oDoc.win0.ICResubmit.value='0';
 ]]></GENSCRIPT></PAGE>"""
 
-# Full live-shaped dropdown: placeholders run far into the future.
+# Full live-shaped dropdown: placeholder years run far into the future, and
+# inside each academic year the Summer row comes FIRST (live order: 2650, 2610,
+# 2620). The class-search default must still land on Term 2, not on the future
+# Summer row — that regression is what this fixture pins.
 FULL_TERM_PAGE = ("<html><body><form name='win0' "
                   "action='/psc/csprd/EMPLOYEE/HRMS/c/SA_LEARNER_SERVICES.CLASS_SEARCH.GBL'>"
                   "<select name='CLASS_SRCH_WRK2_STRM$35$'>" + "".join(
+                      f'<option value="{y % 100:02d}50">{y}-{str(y+1)[-2:]} Summer Session</option>'
                       f'<option value="{y % 100:02d}10">{y}-{str(y+1)[-2:]} Term 1</option>'
                       f'<option value="{y % 100:02d}20">{y}-{str(y+1)[-2:]} Term 2</option>'
                       for y in range(2014, 2036)) + "</select></form></body></html>")
@@ -250,8 +254,17 @@ class ParserTests(unittest.TestCase):
 
     def test_default_term_skips_future_placeholders(self):
         terms = parser.class_search_terms(FULL_TERM_PAGE)
+        # Page-order rule: inside a year SIS lists Summer first, Term 2 last, so
+        # the default is the year's Term 2 — NOT the future Summer row, which a
+        # chronological max would pick.
         self.assertEqual(parser.default_term(terms, year=2026)["label"], "2026-27 Term 2")
         self.assertEqual(parser.default_term(terms, year=2020)["label"], "2020-21 Term 2")
+        self.assertNotIn("Summer", parser.default_term(terms, year=2026)["label"])
+
+    def test_newest_term_is_the_chronological_max_not_the_page_order_max(self):
+        # The term-query radios use the other rule; keep both documented and pinned.
+        terms = parser.class_search_terms(FULL_TERM_PAGE)
+        self.assertEqual(parser.newest_term(terms, year=2026)["label"], "2026-27 Summer Session")
 
     def test_default_term_uses_the_injected_clock(self):
         terms = parser.class_search_terms(FULL_TERM_PAGE)

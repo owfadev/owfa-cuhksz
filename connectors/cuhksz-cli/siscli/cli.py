@@ -398,8 +398,9 @@ def main(argv=None) -> int:
     # Read-only class search (course catalog + section times): advisory only.
     p = sub.add_parser("search", help="class search: list courses and their sections/times for a term (read-only)")
     p.add_argument("--term", help="term strm code or label substring; a substring must match exactly one term "
-                                  "(ambiguous ones are refused with candidate terms); omitted = the newest term "
-                                  "whose start year is not in the future")
+                                  "(ambiguous ones are refused with candidate terms); omitted = the last listed "
+                                  "term of the current or a past academic year (SIS lists Summer before Term 1/2, "
+                                  "so this lands on the term registrations target)")
     p.add_argument("--subject", help="subject code (e.g. AIE, CSC, ENG)")
     p.add_argument("--catalog", help="catalog number (e.g. 1904); combine with --subject")
     p.add_argument("--contains", action="store_true", help="match the catalog number by contains instead of exact")
