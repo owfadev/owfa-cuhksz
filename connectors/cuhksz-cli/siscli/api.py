@@ -62,9 +62,11 @@ class Sis:
     def term_query(self, name: str, term: str | None = None) -> dict:
         """term-interaction component: GET the search page → pick a term → POST Continue → return {terms, term, html}.
 
-        term=None picks the newest term by academic-year/session label ordering
-        (the radio order differs per component: `grades` is newest-first,
-        `appt`/`exam` are oldest-first, so page position is never trusted). Passing an exact
+        term=None picks the newest **non-Summer** term by academic-year/session
+        label ordering (the radio order differs per component: `grades` is
+        newest-first, `appt`/`exam` are oldest-first, so page position is never
+        trusted; Summer is deprioritised because it has not started and is not
+        the registration target). Passing an exact
         strm code (e.g. '2620') or a label substring (e.g. '2026-27 Term 2')
         chooses the term, the substring matching the first hit in page order.
         The term-search page carries labels only, so a strm is matched against
