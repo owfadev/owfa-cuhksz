@@ -369,5 +369,91 @@ class DefaultTermCliTests(unittest.TestCase):
                 self.assertEqual(transport.idx, "4")
 
 
+# ---- 0.4.4 default-term Summer guard -------------------------------------
+# The term-query radios are expected to gain the current academic year's
+# Summer row (Class Search already lists `2650 2026-27 Summer Session`). The
+# default must stay on the year's Term 2: Summer has not started and is not
+# the registration target.
+
+# Oldest-first, like the live `appt`/`exam` pages: current-year Summer is the
+# last row, so a plain chronological max (or a page-order pick) would take it.
+TERMS_WITH_SUMMER = ["2025-26 Term 1", "2025-26 Term 2", "2025-26 Summer Session",
+                     "2026-27 Term 1", "2026-27 Term 2", "2026-27 Summer Session"]
+TERM_LABEL_BY_IDX_SUMMER = {str(i): label for i, label in enumerate(TERMS_WITH_SUMMER)}
+
+
+def _term_page(labels):
+    return ("<html><body><table>" + "".join(
+        f"<tr><td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='{i}'></td>"
+        f"<td>Academic {label} session</td></tr>"
+        for i, label in enumerate(labels)) + "</table></body></html>")
+
+
+TERM_PAGE_WITH_SUMMER = _term_page(TERMS_WITH_SUMMER)
+
+
+class SummerGuardHelperTests(unittest.TestCase):
+    def _radio_terms(self, labels):
+        return [{"idx": str(i), "term": label} for i, label in enumerate(labels)]
+
+    def test_current_year_summer_row_does_not_win_over_the_years_term_2(self):
+        terms = self._radio_terms(TERMS_WITH_SUMMER)
+        self.assertEqual(parser.newest_term(terms, year=2026)["term"], "2026-27 Term 2")
+        # The previous year's Summer is deprioritised the same way.
+        self.assertEqual(parser.newest_term(terms, year=2025)["term"], "2025-26 Term 2")
+
+    def test_summer_only_list_still_returns_that_summer(self):
+        terms = self._radio_terms(["2026-27 Summer Session"])
+        self.assertEqual(parser.newest_term(terms, year=2026)["term"], "2026-27 Summer Session")
+
+    def test_all_future_rows_fall_back_to_the_newest_overall(self):
+        # No row is ≤ current year, so the guard does not apply: the fallback
+        # is the newest row overall — here a Summer, proving the fallback was
+        # not silently filtered down to non-Summer rows.
+        terms = self._radio_terms(["2027-28 Term 1", "2027-28 Term 2", "2027-28 Summer Session"])
+        self.assertEqual(parser.newest_term(terms, year=2026)["term"],
+                         "2027-28 Summer Session")
+
+    def test_non_summer_fallback_within_the_current_year_is_the_chronological_max(self):
+        # Guard over Term 1/2 only: Term 2 > Term 1, regardless of page order.
+        terms = self._radio_terms(["2026-27 Term 2", "2026-27 Term 1"])
+        self.assertEqual(parser.newest_term(terms, year=2026)["term"], "2026-27 Term 2")
+
+
+class DefaultTermSummerGuardCliTests(unittest.TestCase):
+    """End-to-end: the default for appt/exam/grades with a 2026-27 Summer radio."""
+
+    def run_cli(self, argv, page=TERM_PAGE_WITH_SUMMER, labels=TERM_LABEL_BY_IDX_SUMMER):
+        transport = FakeTermResultTransport(page, labels)
+        sis = Sis.__new__(Sis)
+        sis.cfg = {}
+        sis.transport = transport
+        with patch.object(cli, "Sis", return_value=sis), \
+                contextlib.redirect_stdout(io.StringIO()) as out, \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            code = cli.main(argv)
+        return code, out.getvalue(), err.getvalue(), transport
+
+    def test_no_term_on_appt_exam_grades_ignores_the_current_year_summer_radio(self):
+        for cmd in ("appt", "exam", "grades"):
+            with self.subTest(cmd=cmd):
+                code, out, err, transport = self.run_cli([cmd, "--format", "json"])
+                self.assertEqual(code, 0)
+                self.assertEqual(err, "")
+                self.assertEqual(json.loads(out)["term"], "2026-27 Term 2")
+                # idx 4 is 2026-27 Term 2; idx 5 is the Summer row that a
+                # chronological max would select.
+                self.assertEqual(transport.idx, "4")
+
+    def test_explicit_summer_strm_still_selects_summer(self):
+        # The guard only changes the default: an explicit --term keeps working.
+        code, out, err, transport = self.run_cli(
+            ["appt", "--term", "2650", "--format", "json"])
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertEqual(json.loads(out)["term"], "2026-27 Summer Session")
+        self.assertEqual(transport.idx, "5")
+
+
 if __name__ == "__main__":
     unittest.main()

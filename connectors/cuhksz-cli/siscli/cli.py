@@ -419,7 +419,7 @@ def main(argv=None) -> int:
         p = sub.add_parser(comp, help=label)
         p.add_argument("--format", choices=["text", "json"], default="text")
         if comp != "history":
-            p.add_argument("--term", help="term label substring or strm code (omitted = the newest term by "
+            p.add_argument("--term", help="term label substring or strm code (omitted = the newest non-Summer term by "
                                           "label ordering, not page order; e.g. '2026-27 Term 2' or 2620)")
 
     p = sub.add_parser("center", help="student center page (text summary)")

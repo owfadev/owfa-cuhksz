@@ -261,10 +261,12 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parser.default_term(terms, year=2020)["label"], "2020-21 Term 2")
         self.assertNotIn("Summer", parser.default_term(terms, year=2026)["label"])
 
-    def test_newest_term_is_the_chronological_max_not_the_page_order_max(self):
-        # The term-query radios use the other rule; keep both documented and pinned.
+    def test_newest_term_prefers_the_current_years_non_summer_max(self):
+        # The term-query radios use the other rule, and since 0.4.4 that rule
+        # deprioritises Summer: a current-year Summer row must not win over the
+        # year's Term 2 (guard documented on `parser.newest_term`).
         terms = parser.class_search_terms(FULL_TERM_PAGE)
-        self.assertEqual(parser.newest_term(terms, year=2026)["label"], "2026-27 Summer Session")
+        self.assertEqual(parser.newest_term(terms, year=2026)["label"], "2026-27 Term 2")
 
     def test_default_term_uses_the_injected_clock(self):
         terms = parser.class_search_terms(FULL_TERM_PAGE)
