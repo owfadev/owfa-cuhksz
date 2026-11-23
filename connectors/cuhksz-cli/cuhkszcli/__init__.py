@@ -15,9 +15,10 @@ See the migration section of SKILL.md.
 
 Discipline: read-only — never issues any write request (the deliberate
 exceptions, inherited from siscli, are query-only POSTs on PeopleSoft
-search pages: the term-selection "Continue" and the two-step Class
-Search AJAX flow); credentials and sessions live only in the machine
-substrate, never in any repository.
+search pages: the term-selection "Continue", the two-step Class Search
+AJAX flow, and the per-course "View All Sections" (`hviewall`) expansion);
+credentials and sessions live only in the machine substrate, never in any
+repository.
 """
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
