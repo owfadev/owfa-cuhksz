@@ -8,6 +8,7 @@ import contextlib
 import io
 import json
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 from siscli import cli, config, parser
@@ -44,10 +45,89 @@ oDoc.win0.ICResubmit.value='0';
 ]]></GENSCRIPT></PAGE>"""
 
 # Full live-shaped dropdown: placeholders run far into the future.
-FULL_TERM_PAGE = "<html><body><form name='win0'><select name='CLASS_SRCH_WRK2_STRM$35$'>" + "".join(
-    f'<option value="{y % 100:02d}10">{y}-{str(y+1)[-2:]} Term 1</option>'
-    f'<option value="{y % 100:02d}20">{y}-{str(y+1)[-2:]} Term 2</option>'
-    for y in range(2014, 2036)) + "</select></form></body></html>"
+FULL_TERM_PAGE = ("<html><body><form name='win0' "
+                  "action='/psc/csprd/EMPLOYEE/HRMS/c/SA_LEARNER_SERVICES.CLASS_SEARCH.GBL'>"
+                  "<select name='CLASS_SRCH_WRK2_STRM$35$'>" + "".join(
+                      f'<option value="{y % 100:02d}10">{y}-{str(y+1)[-2:]} Term 1</option>'
+                      f'<option value="{y % 100:02d}20">{y}-{str(y+1)[-2:]} Term 2</option>'
+                      for y in range(2014, 2036)) + "</select></form></body></html>")
+
+# ---- synthetic "View All Sections" fixtures (shapes verified live 2026-11-23):
+# each course with more than 3 rendered sections carries one
+# `javascript:submitAction_win0(document.win0,'$ICFieldNNN$hviewall$N')` link.
+A_ACTION = "$ICField106$hviewall$0"
+B_ACTION = "$ICField106$hviewall$1"
+C_ACTION = "$ICField106$hviewall$2"
+C_SHIFTED_ACTION = "$ICField200$hviewall$2"  # action names shift after an expansion
+PAYLOAD_STATE = ("<script>oDoc.win0.ICStateNum.value=301;"
+                 "oDoc.win0.ICResubmit.value='0';</script>")
+
+
+def _course_html(idx: int, title: str, sections: list[tuple],
+                 action: str | None = None) -> str:
+    parts = [f"<div id='win0divDERIVED_CLSRCH_DESCR200${idx}'>{title}</div>"]
+    if action:
+        parts.append(
+            f"<div id='win0div$ICField106${idx}'>"
+            f"<a name='{action}' id='{action}' "
+            f"href=\"javascript:submitAction_win0(document.win0,'{action}');\" "
+            f"class='HEADERLINK'>View All Sections</a></div>")
+    for j, (name, when, room, instructor) in enumerate(sections):
+        parts.append(f"<div id='DERIVED_CLSRCH_SSR_CLASSNAME_LONG${idx}${j}'>{name}</div>")
+        if when:
+            parts.append(f"<div id='MTG_DAYTIME${idx}${j}'>{when}</div>")
+        if room:
+            parts.append(f"<div id='MTG_ROOM${idx}${j}'>{room}</div>")
+        if instructor:
+            parts.append(f"<div id='MTG_INSTR${idx}${j}'>{instructor}</div>")
+    return "".join(parts)
+
+
+def _lec_sections(prefix: str, count: int, start: int = 1000) -> list[tuple]:
+    return [(f"{prefix}{i:02d}-LEC({start + i})", "Mo 9:00AM - 10:00AM", "Room 1", "Prof X")
+            for i in range(1, count + 1)]
+
+
+def _tut_sections(prefix: str, count: int, start: int = 2000) -> list[tuple]:
+    return [(f"{prefix}{i:02d}-TUT({start + i})", "Fr 2:00PM - 3:00PM", "Room 2", "TA Y")
+            for i in range(1, count + 1)]
+
+
+def _results_payload(*blocks: str, state: str = "") -> str:
+    return ("<?xml version='1.0'?><PAGE id='SSR_CLSRCH_RSLT'><![CDATA["
+            + state + "".join(blocks) + "]]></PAGE>")
+
+
+MULTI_INITIAL = _results_payload(
+    _course_html(0, "AAA 1000 - Alpha", _lec_sections("L", 3), action=A_ACTION),
+    _course_html(1, "BBB 2000 - Beta", _lec_sections("L", 2)),
+    _course_html(2, "CCC 3000 - Gamma",
+                 _lec_sections("L", 2) + _tut_sections("T", 1), action=C_ACTION),
+    state=PAYLOAD_STATE,
+)
+AFTER_A = _results_payload(
+    _course_html(0, "AAA 1000 - Alpha", _lec_sections("L", 6), action=A_ACTION),
+    _course_html(1, "BBB 2000 - Beta", _lec_sections("L", 2)),
+    _course_html(2, "CCC 3000 - Gamma",
+                 _lec_sections("L", 2) + _tut_sections("T", 1), action=C_SHIFTED_ACTION),
+    state=PAYLOAD_STATE,
+)
+AFTER_C = _results_payload(
+    # A collapsed again on purpose: the merge must keep the earlier expansion.
+    _course_html(0, "AAA 1000 - Alpha", _lec_sections("L", 3), action=A_ACTION),
+    _course_html(1, "BBB 2000 - Beta", _lec_sections("L", 2)),
+    _course_html(2, "CCC 3000 - Gamma",
+                 _lec_sections("L", 4) + _tut_sections("T", 1), action=C_SHIFTED_ACTION),
+)
+AFTER_C_ONLY = _results_payload(
+    _course_html(0, "AAA 1000 - Alpha", _lec_sections("L", 3), action=A_ACTION),
+    _course_html(1, "BBB 2000 - Beta", _lec_sections("L", 2)),
+    _course_html(2, "CCC 3000 - Gamma",
+                 _lec_sections("L", 4) + _tut_sections("T", 1), action=C_ACTION),
+)
+GFH_PAYLOAD = _results_payload(
+    _course_html(0, "GFH 1000 - In Dialogue with Humanity",
+                 _lec_sections("L", 3) + _tut_sections("T", 4), action=A_ACTION))
 
 # Two CDATA blocks: the parser must concatenate them before reading the HTML.
 RESULT_PAYLOAD = (
@@ -94,6 +174,27 @@ class FakeTransport:
     def post_ajax(self, action_url, fields, timeout=None):
         self.posts.append((action_url, dict(fields), timeout))
         return self.step1 if len(self.posts) == 1 else self.payload
+
+
+class ExpandingTransport(FakeTransport):
+    """FakeTransport + per-action "View All Sections" responses."""
+
+    def __init__(self, page=TERM_PAGE, step1=STEP1_RESPONSE, payload=RESULT_PAYLOAD,
+                 expansions=None, fail_actions=()):
+        super().__init__(page=page, step1=step1, payload=payload)
+        self.expansions = dict(expansions or {})
+        self.fail_actions = set(fail_actions)
+
+    def post_ajax(self, action_url, fields, timeout=None):
+        self.posts.append((action_url, dict(fields), timeout))
+        if len(self.posts) == 1:
+            return self.step1
+        if len(self.posts) == 2:
+            return self.payload
+        action = fields.get("ICAction")
+        if action in self.fail_actions:
+            raise TransportError("synthetic expansion failure")
+        return self.expansions.get(action, self.payload)
 
 
 def make_sis(transport, cfg=None):
@@ -152,6 +253,42 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parser.default_term(terms, year=2026)["label"], "2026-27 Term 2")
         self.assertEqual(parser.default_term(terms, year=2020)["label"], "2020-21 Term 2")
 
+    def test_default_term_uses_the_injected_clock(self):
+        terms = parser.class_search_terms(FULL_TERM_PAGE)
+        with patch.object(parser, "_today", return_value=date(2020, 6, 1)):
+            self.assertEqual(parser.default_term(terms)["label"], "2020-21 Term 2")
+
+    def test_term_candidates_take_an_explicit_today(self):
+        terms = parser.class_search_terms(FULL_TERM_PAGE)
+        hits = parser.match_terms(terms, "Term 2")
+        candidates = parser.term_candidates(hits, today=date(2026, 11, 23))
+        self.assertEqual(len(candidates), 6)
+        self.assertIn({"strm": "2620", "label": "2026-27 Term 2"}, candidates)
+
+    def test_parse_class_search_attaches_view_all_actions_to_their_course(self):
+        courses = parser.parse_class_search(MULTI_INITIAL)["courses"]
+        self.assertEqual(courses[0]["view_all_action"], A_ACTION)
+        self.assertFalse(courses[0]["sections_complete"])
+        self.assertIsNone(courses[1]["view_all_action"])
+        self.assertTrue(courses[1]["sections_complete"])
+        self.assertEqual(courses[2]["view_all_action"], C_ACTION)
+        self.assertFalse(courses[2]["sections_complete"])
+
+    def test_parse_terms_finds_a_label_embedded_in_the_row(self):
+        # The unanchored label scan is what parse_terms/grades/appt rely on; a
+        # second, anchored `_TERM_LABEL` definition used to shadow it.
+        html = ("<table><tr><td>Pick a term</td>"
+                "<td><input type='radio' name='SSR_DUMMY_RECV1$sels$0' value='0'></td>"
+                "<td>Academic 2026-27 Term 2 session</td></tr></table>")
+        self.assertEqual(parser.parse_terms(html), [{"idx": "0", "term": "2026-27 Term 2"}])
+
+    def test_grade_and_appt_term_labels_are_found_mid_page(self):
+        grades = ("<html><body><div>Grades for 2026-27 Term 2</div>"
+                  "<table><tr><th>Grading</th><th>Grade Points</th></tr></table></body></html>")
+        self.assertEqual(parser.parse_grade_report(grades)["term"], "2026-27 Term 2")
+        appt = "<html><body><div>Enrollment for 2026-27 Term 1 opens soon</div></body></html>"
+        self.assertEqual(parser.parse_appt(appt)["term"], "2026-27 Term 1")
+
 
 class ApiTests(unittest.TestCase):
     def test_term_matching_by_label_substring_and_by_strm(self):
@@ -171,8 +308,11 @@ class ApiTests(unittest.TestCase):
 
     def test_ambiguous_term_substring_is_refused_instead_of_picking_the_oldest(self):
         sis = make_sis(FakeTransport(page=FULL_TERM_PAGE))
-        with self.assertRaises(SystemExit) as raised:
-            sis.class_search(term="Term 2", subject="AIE")
+        # Inject the year: the fixture only runs to 2035-36, so a real
+        # date.today() would move the candidate window past it after 2029.
+        with patch.object(parser, "_today", return_value=date(2026, 11, 23)):
+            with self.assertRaises(SystemExit) as raised:
+                sis.class_search(term="Term 2", subject="AIE")
         message = str(raised.exception)
         self.assertIn("ambiguous", message)
         self.assertIn("2026-27 Term 2 (2620)", message)
@@ -233,6 +373,85 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(step2[config.CLASS_SEARCH_SUBJECT_FIELD], "AIE")
         self.assertEqual(step2[config.CLASS_SEARCH_CATALOG_FIELD], "1904")
 
+    def test_default_marks_incomplete_courses_without_expanding(self):
+        transport = ExpandingTransport(payload=MULTI_INITIAL)
+        sis = make_sis(transport)
+        data = sis.class_search(subject="AIE")
+        self.assertFalse(data["all_sections"])
+        courses = {c["course"]: c for c in data["courses"]}
+        self.assertFalse(courses["AAA 1000 - Alpha"]["sections_complete"])
+        self.assertFalse(courses["AAA 1000 - Alpha"]["sections_expanded"])
+        self.assertTrue(courses["BBB 2000 - Beta"]["sections_complete"])
+        self.assertEqual(len(transport.posts), 2)  # no expansion request without the flag
+
+    def test_all_sections_expands_every_course_and_marks_completeness(self):
+        transport = ExpandingTransport(
+            payload=MULTI_INITIAL,
+            expansions={A_ACTION: AFTER_A, C_SHIFTED_ACTION: AFTER_C})
+        sis = make_sis(transport)
+        data = sis.class_search(subject="AIE", all_sections=True)
+
+        self.assertTrue(data["all_sections"])
+        self.assertEqual([c["course"] for c in data["courses"]],
+                         ["AAA 1000 - Alpha", "BBB 2000 - Beta", "CCC 3000 - Gamma"])
+        courses = {c["course"]: c for c in data["courses"]}
+        # AFTER_C renders A collapsed again; the merge keeps the earlier expansion.
+        self.assertEqual(len(courses["AAA 1000 - Alpha"]["sections"]), 6)
+        self.assertTrue(courses["AAA 1000 - Alpha"]["sections_complete"])
+        self.assertTrue(courses["AAA 1000 - Alpha"]["sections_expanded"])
+        self.assertEqual(len(courses["BBB 2000 - Beta"]["sections"]), 2)
+        self.assertTrue(courses["BBB 2000 - Beta"]["sections_complete"])
+        self.assertFalse(courses["BBB 2000 - Beta"]["sections_expanded"])
+        self.assertEqual(len(courses["CCC 3000 - Gamma"]["sections"]), 5)
+        self.assertTrue(courses["CCC 3000 - Gamma"]["sections_complete"])
+        for course in data["courses"]:
+            self.assertNotIn("view_all_action", course)  # page plumbing is not output
+        self.assertNotIn("notes", data)
+
+        self.assertEqual(len(transport.posts), 4)  # step 1, step 2, two expansions
+        # Action names shift after an expansion: the second expansion must use
+        # the action re-read from the current payload, not the remembered one.
+        self.assertEqual(transport.posts[3][1]["ICAction"], C_SHIFTED_ACTION)
+        # State comes from the current payload, not from step 1.
+        self.assertEqual(transport.posts[2][1]["ICStateNum"], "301")
+        self.assertEqual(transport.posts[2][1]["ICChanged"], "-1")
+
+    def test_failed_expansion_degrades_without_aborting_the_command(self):
+        transport = ExpandingTransport(
+            payload=MULTI_INITIAL, expansions={C_ACTION: AFTER_C_ONLY},
+            fail_actions={A_ACTION})
+        sis = make_sis(transport)
+        data = sis.class_search(subject="AIE", all_sections=True)  # must not raise
+
+        courses = {c["course"]: c for c in data["courses"]}
+        self.assertEqual(len(courses["AAA 1000 - Alpha"]["sections"]), 3)
+        self.assertFalse(courses["AAA 1000 - Alpha"]["sections_complete"])
+        self.assertFalse(courses["AAA 1000 - Alpha"]["sections_expanded"])
+        # The rest of the run still expands.
+        self.assertEqual(len(courses["CCC 3000 - Gamma"]["sections"]), 5)
+        self.assertTrue(courses["CCC 3000 - Gamma"]["sections_complete"])
+        notes = data["notes"]
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0]["kind"], "expansion_failed")
+        self.assertEqual(notes[0]["course"], "AAA 1000 - Alpha")
+        self.assertIn("kept", notes[0]["detail"])
+
+    def test_expansion_cap_is_respected_and_noted(self):
+        transport = ExpandingTransport(
+            payload=MULTI_INITIAL, expansions={A_ACTION: AFTER_A})
+        sis = make_sis(transport)
+        with patch.object(config, "CLASS_SEARCH_MAX_EXPANSIONS", 1):
+            data = sis.class_search(subject="AIE", all_sections=True)
+
+        courses = {c["course"]: c for c in data["courses"]}
+        self.assertEqual(len(courses["AAA 1000 - Alpha"]["sections"]), 6)
+        self.assertEqual(len(courses["CCC 3000 - Gamma"]["sections"]), 3)
+        self.assertFalse(courses["CCC 3000 - Gamma"]["sections_complete"])
+        self.assertEqual(len(transport.posts), 3)  # only one expansion request
+        cap_notes = [n for n in data.get("notes", []) if n["kind"] == "expansion_cap"]
+        self.assertEqual(len(cap_notes), 1)
+        self.assertEqual(cap_notes[0]["cap"], 1)
+
     def test_warning_payload_surfaces_as_a_notice(self):
         sis = make_sis(FakeTransport(payload=WARNING_PAYLOAD))
         data = sis.class_search(subject="CSC")
@@ -276,6 +495,51 @@ class CliTests(unittest.TestCase):
         self.assertIn("AIE 1904 - AI Exploration IV", out)
         self.assertIn("  L01-LEC(2278)  MoWe 10:00AM - 11:15AM / Fr 10:00AM - 10:50AM  Room 101  Prof A", out)
         self.assertIn("S01-SUP(2549)", out)
+
+    def test_cli_text_groups_lec_and_tut_sections(self):
+        sis = make_sis(ExpandingTransport(payload=GFH_PAYLOAD))
+        code, out, err = self.run_cli(
+            ["search", "--subject", "GFH", "--catalog", "1000"], sis)
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertIn("LEC:", out)
+        self.assertIn("TUT:", out)
+        self.assertLess(out.index("LEC:"), out.index("TUT:"))
+        self.assertIn("    L01-LEC(1001)  Mo 9:00AM - 10:00AM", out)
+        self.assertIn("    T01-TUT(2001)  Fr 2:00PM - 3:00PM", out)
+
+    def test_cli_text_marks_expanded_courses_with_all_section_counts(self):
+        transport = ExpandingTransport(
+            payload=MULTI_INITIAL,
+            expansions={A_ACTION: AFTER_A, C_SHIFTED_ACTION: AFTER_C})
+        code, out, err = self.run_cli(
+            ["search", "--subject", "AIE", "--all-sections"], make_sis(transport))
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertIn("[all sections]", out)
+        self.assertIn("AAA 1000 - Alpha  — 6 sections (all)", out)
+        self.assertIn("BBB 2000 - Beta  — 2 sections", out)
+        self.assertIn("CCC 3000 - Gamma  — 5 sections (all)", out)
+
+    def test_cli_text_reports_a_failed_expansion_as_a_note(self):
+        transport = ExpandingTransport(
+            payload=MULTI_INITIAL, expansions={C_ACTION: AFTER_C_ONLY},
+            fail_actions={A_ACTION})
+        code, out, err = self.run_cli(
+            ["search", "--subject", "AIE", "--all-sections"], make_sis(transport))
+        self.assertEqual(code, 0)
+        self.assertIn("[note] AAA 1000 - Alpha:", out)
+        self.assertIn("3 sections (expansion failed; first 3 shown)", out)
+
+    def test_cli_json_exposes_per_course_completeness(self):
+        code, out, err = self.run_cli(
+            ["search", "--subject", "AIE", "--format", "json"],
+            make_sis(ExpandingTransport(payload=MULTI_INITIAL)))
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["all_sections"])
+        self.assertFalse(data["courses"][0]["sections_complete"])
+        self.assertTrue(data["courses"][1]["sections_complete"])
 
     def test_cli_json_output_and_no_secrets_are_printed(self):
         cfg = {"accounts": {"test-user": {"username": "test-user", "password": "test-secret"}},

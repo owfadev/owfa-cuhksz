@@ -47,7 +47,7 @@ On hosts using uv, `uv venv .venv` and `uv pip install --python .venv -e .` are 
 cuhksz-cli bb courses --format text
 cuhksz-cli bb fetch <course> -o out/
 cuhksz-cli sis schedule --days
-cuhksz-cli sis grades --term 'Term 2'
+cuhksz-cli sis grades --term '2026-27 Term 2'
 cuhksz-cli home status
 cuhksz-cli home migrate --dry-run
 ```
@@ -58,6 +58,7 @@ Both `status` commands are **offline tri-state probes** (zero network, zero logi
 
 ## Changelog
 
+- **0.4.1** (2026-11-23): `sis search --all-sections` — SIS renders only the first 3 sections per course, so the new flag expands every course's "View All Sections" list via the page's own read-only `$ICFieldNNN$hviewall$0` AJAX action (sequential, capped at 30 courses, per-request timeout; a failed expansion degrades to the rendered sections with a structured note). JSON gains per-course `sections_complete` / `sections_expanded` plus top-level `all_sections` / `notes`; text output marks expanded courses `N sections (all)` and groups mixed `LEC:` / `TUT:` / `SUP:` sections. Non-breaking: the default is still the fast first-3 view; no existing command, flag or output shape changes.
 - **0.4.0** (2026-11-23): new read-only `cuhksz-cli sis search` — Class Search lists a term's courses with their sections, meeting times, rooms and instructors (two-step AJAX query on `SA_LEARNER_SERVICES.CLASS_SEARCH.GBL`; open sections only by default; advisory only — no cart, no enrollment, no state change). Non-breaking: no existing command, flag or output shape changes; plus the new `sis-course` member plugin and its skill live in the package repo.
 
 ## Layout

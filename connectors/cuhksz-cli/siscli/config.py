@@ -80,6 +80,12 @@ CLASS_SEARCH_CAREER_FIELD = "SSR_CLSRCH_WRK_ACAD_CAREER$2"
 CLASS_SEARCH_OPEN_FIELD = "SSR_CLSRCH_WRK_SSR_OPEN_ONLY$chk$3"
 CLASS_SEARCH_ACTION = "CLASS_SRCH_WRK2_SSR_PB_CLASS_SRCH"
 CLASS_SEARCH_MAX_CLASSES = 50  # the server returns an SSR_SS_WARNING page beyond this
+# "View All Sections" expansion (--all-sections): SIS renders only the first 3
+# sections per course; each course with more exposes one hviewall action.
+# Expansion is sequential and costs one AJAX request per course, so it is
+# capped; a same-size request typically takes a few seconds.
+CLASS_SEARCH_MAX_EXPANSIONS = 30
+CLASS_SEARCH_EXPANSION_TIMEOUT = 45  # seconds per expansion request
 
 # ICAction constants (verified 2026-10-05)
 IC_VIEW_REPORT = "CUSZ_TSRQST_WRK_VIEW_PB"  # transcript View Report button
