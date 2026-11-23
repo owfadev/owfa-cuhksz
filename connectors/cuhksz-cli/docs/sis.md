@@ -84,21 +84,21 @@ Credentials and sessions live only in the local machine substrate: `$OWFA_HOME/c
 `cuhksz-cli sis search` lists the courses a term offers, and for each course its sections with meeting times, room and instructor. It is a **catalog query**, not enrollment: no cart, no selection, no state change.
 
 ```text
-cuhksz-cli sis search --term 'Term 2' --subject AIE
+cuhksz-cli sis search --term '2026-27 Term 2' --subject AIE
 cuhksz-cli sis search --term 2620 --subject CSC --catalog 3200
 cuhksz-cli sis search --subject ENG --catalog 2002S --contains --all-seats --format json
 ```
 
-- `--term` accepts a label substring (`Term 2`) or the strm code (`2620`); when omitted it resolves to the newest term on the page. The resolved term (label + strm) is echoed in both text and JSON output.
+- `--term` accepts the strm code (`2620`) or a label substring; a substring that matches more than one term (e.g. bare `Term 2`, which exists from 2014-15 to 2035-36) is **refused** with the matching terms listed — pass the full label (`2026-27 Term 2`) or the strm. When omitted it resolves to the newest term that is **not in the future** (the dropdown carries placeholder years far ahead). The resolved term (label + strm) is echoed in both text and JSON output.
 - `--subject` / `--catalog`: SIS needs at least two criteria (the term plus a subject and/or catalog). At least one of the two is required; with neither, the command exits with an actionable message. A subject alone can match more than the server's 50-class ceiling, so add `--catalog` to narrow.
 - `--contains` switches the catalog match from exact (`E`) to contains (`C`).
 - `--all-seats` includes closed/full sections; the default is **open only** (`SSR_CLSRCH_WRK_SSR_OPEN_ONLY$chk$3=Y`).
 - `--career` is passed through verbatim, but must stay empty by default: sending `UGCU` yields 0 results (verified live).
 - `--format text|json`.
 
-**Protocol** (verified live 2026-11-23): Class Search is a **two-step AJAX flow** on `SA_LEARNER_SERVICES.CLASS_SEARCH.GBL` (nav `HC_CLASS_SEARCH`). Step 1 POSTs a change event (`ICAJAX=1`, `ICNAVTYPEDROPDOWN=0`, `ICChanged=1`, `ICAction=None`) with the term/subject/catalog/open-only fields to prime component state; step 2 POSTs the same fields with `ICStateNum` / `ICSID` / `ICResubmit` copied back from step 1 and `ICChanged=-1`, `ICAction=CLASS_SRCH_WRK2_SSR_PB_CLASS_SRCH`. Both requests carry `X-Requested-With: XMLHttpRequest`. The response is `<?xml?><PAGE id='SSR_CLSRCH_RSLT'>` with the real HTML inside CDATA blocks (concatenate them, then parse). When the query would return more than 50 classes the server answers with `PAGE id='SSR_SS_WARNING'` ("over 50 classes") instead of results; the CLI surfaces that as a structured notice telling the user to narrow the criteria.
+**Protocol** (verified live 2026-11-23): Class Search is a **two-step AJAX flow** on `SA_LEARNER_SERVICES.CLASS_SEARCH.GBL` (nav `HC_CLASS_SEARCH`). Step 1 POSTs a change event (`ICAJAX=1`, `ICNAVTYPEDROPDOWN=0`, `ICChanged=1`, `ICAction=None`) with the term/subject/catalog/open-only fields to prime component state; step 2 POSTs the same fields with `ICStateNum` / `ICResubmit` taken from step 1 (they arrive as JS assignments in the XML response, not as `<input>` fields; `ICSID` is normally not echoed and the page value is kept) and `ICChanged=-1`, `ICAction=CLASS_SRCH_WRK2_SSR_PB_CLASS_SRCH`. Both requests carry `X-Requested-With: XMLHttpRequest`. The response is `<?xml?><PAGE id='SSR_CLSRCH_RSLT'>` with the real HTML inside CDATA blocks (concatenate them, then parse). When the query would return more than 50 classes the server answers with `PAGE id='SSR_SS_WARNING'` ("over 50 classes") instead of results; the CLI surfaces that as a structured notice telling the user to narrow the criteria.
 
-**Limitations**: only the **first 3 sections per course** are rendered by default (PeopleSoft pagination), so a course with more sections shows only those three; narrow with `--catalog` / `--contains` rather than treating a short list as exhaustive. The term list and result columns come from the live PIA page — a school upgrade can break the anchors, in which case re-run with `SIS_CLI_DEBUG=<dir>` to capture evidence.
+**Limitations**: only the **first 3 sections per course** are rendered by default (PeopleSoft pagination), so a course with more sections shows only those three; narrow with `--catalog` / `--contains` rather than treating a short list as exhaustive. The term list and result columns come from the live PIA page — a school upgrade can break the anchors, in which case re-run with `SIS_CLI_DEBUG=<dir>` to capture evidence (both the initial page and every AJAX response are dumped).
 
 > 本命令只提供课程信息的查询与参考建议；AI 不能保证给出最优选课方案，也不代替用户做决定；连接器是**只读**的——不选课、不加购物车、不交作业、不执行任何 state-changing 交易；最终以 SIS 与教务规定为准。
 

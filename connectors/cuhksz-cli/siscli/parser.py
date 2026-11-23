@@ -6,6 +6,8 @@ Parsing anchors all come from live page structures verified on 2026-10-05
 
 from __future__ import annotations
 
+from datetime import date
+
 import re
 
 from bs4 import BeautifulSoup
@@ -56,22 +58,79 @@ def class_search_terms(html: str) -> list[dict]:
     return out
 
 
-def ic_state_fields(html: str) -> dict[str, str]:
-    """PeopleSoft component state inputs (ICStateNum/ICSID/ICResubmit) echoed by an AJAX response.
+_CDATA_BLOCK = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.S)
 
-    Class Search step 2 must copy these back from the step-1 response; missing
-    fields simply stay absent (the caller overlays what is present).
+# The step-1 AJAX response is XML/JS, not an HTML form: PeopleSoft echoes the
+# component state as assignments (`oDoc.win0.ICStateNum.value=218;`) inside a
+# GENSCRIPT CDATA block, and `ICSID` usually is not echoed at all. A plain
+# `<input>` scan therefore sees nothing on a live response (verified 2026-11-23).
+_IC_JS_STATE = (
+    ("ICStateNum", re.compile(r"ICStateNum\s*\.\s*value\s*=\s*['\"]?(\d+)")),
+    ("ICResubmit", re.compile(r"ICResubmit\s*\.\s*value\s*=\s*['\"]?(\d+)")),
+    ("ICSID", re.compile(r"ICSID\s*\.\s*value\s*=\s*['\"]([^'\"]+)")),
+)
+
+
+def ic_state_fields(payload: str) -> dict[str, str]:
+    """Component state echoed by an AJAX response: ICStateNum / ICResubmit / ICSID.
+
+    Class Search step 2 copies back whatever the step-1 response carries; a
+    field that is not echoed stays absent, so the caller keeps the page value
+    (`ICSID` normally is). Both shapes are supported: the JS assignments that
+    live responses use, and `<input>` elements inside CDATA-embedded HTML.
     """
-    soup = BeautifulSoup(html, "html.parser")
     out: dict[str, str] = {}
-    for inp in soup.find_all("input"):
-        name = inp.get("name")
-        if name in ("ICStateNum", "ICSID", "ICResubmit"):
-            out[name] = inp.get("value") or ""
+    html = "".join(_CDATA_BLOCK.findall(payload)) or payload
+    if html.lstrip().startswith("<?"):
+        html = ""  # bare XML wrapper without CDATA: nothing to scan as HTML
+    if html:
+        soup = BeautifulSoup(html, "html.parser")
+        for inp in soup.find_all("input"):
+            name = inp.get("name")
+            if name in ("ICStateNum", "ICSID", "ICResubmit"):
+                out[name] = inp.get("value") or ""
+    for name, rx in _IC_JS_STATE:
+        if name in out:
+            continue
+        m = rx.search(payload)
+        if m:
+            out[name] = m.group(1)
     return out
 
 
-_CDATA_BLOCK = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.S)
+_TERM_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Session)", re.I)
+
+
+def term_year(label: str) -> int | None:
+    """Start year of a term label ("2026-27 Term 2" → 2026); None when unparseable."""
+    m = _TERM_LABEL.match(label)
+    return int(m.group(1)) if m else None
+
+
+def match_terms(terms: list[dict], query: str) -> list[dict]:
+    """Resolve a term query: an exact strm wins, otherwise every label substring hit."""
+    exact = [r for r in terms if r["strm"] == query]
+    if exact:
+        return exact
+    return [r for r in terms if query.lower() in r["label"].lower()]
+
+
+def default_term(terms: list[dict], year: int | None = None) -> dict | None:
+    """Newest term that is not in the future.
+
+    The class-search dropdown runs to placeholder years far ahead (2035-36
+    today), so "the last option" is useless as a default: pick the newest
+    label whose start year is not after the current year.
+    """
+    if not terms:
+        return None
+    y = year if year is not None else date.today().year
+    candidates = []
+    for r in terms:
+        m = _TERM_LABEL.match(r["label"])
+        if m and int(m.group(1)) <= y:
+            candidates.append(r)
+    return candidates[-1] if candidates else terms[-1]
 _CLASS_SEARCH_WARNING = re.compile(r"<PAGE[^>]*id=['\"]SSR_SS_WARNING['\"]", re.I)
 
 

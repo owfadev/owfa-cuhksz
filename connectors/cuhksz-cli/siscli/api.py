@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 
 from . import config, parser
 from .auth import login
@@ -110,13 +111,23 @@ class Sis:
                 "Class Search page exposes no term dropdown (page structure "
                 "changed; re-run with SIS_CLI_DEBUG=<dir> to capture evidence)")
         if term:
-            pick = next((r for r in terms
-                         if term.lower() in r["label"].lower() or term == r["strm"]), None)
-            if pick is None:
+            hits = parser.match_terms(terms, term)
+            if not hits:
                 options = [f"{r['label']} ({r['strm']})" for r in terms]
                 raise SystemExit(f"Term not matched: {term!r}; available: {options}")
+            if len(hits) > 1:
+                year = date.today().year
+                past = [r for r in hits if (parser.term_year(r["label"]) or 0) <= year][-3:]
+                future = [r for r in hits if (parser.term_year(r["label"]) or 0) > year][:3]
+                options = [f"{r['label']} ({r['strm']})" for r in past + future]
+                raise SystemExit(
+                    f"Term {term!r} is ambiguous — it matches {len(hits)} terms. "
+                    f"Pass the full label or the strm code, e.g. one of: {options}")
+            pick = hits[0]
         else:
-            pick = terms[-1]  # page order is oldest → newest; the last is the newest
+            pick = parser.default_term(terms)
+            if pick is None:
+                raise SystemExit("Class Search exposes no usable term; pass --term explicitly")
         strm = pick["strm"]
         action, fields = extract_win0_form(html)
 

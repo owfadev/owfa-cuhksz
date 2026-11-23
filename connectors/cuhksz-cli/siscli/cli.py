@@ -149,7 +149,7 @@ def cmd_search(sis: Sis, args) -> int:
     if data.get("notice"):
         print(f"[notice] {data['notice']}")
         return 0
-    print(f"[{data['term']}] subject={data['subject'] or '-'} "
+    print(f"[{data['term']} / {data['strm']}] subject={data['subject'] or '-'} "
           f"catalog={data['catalog'] or '-'} — {len(data['courses'])} course(s)")
     for course in data["courses"]:
         print("")

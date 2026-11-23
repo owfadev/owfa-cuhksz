@@ -260,6 +260,10 @@ class Transport:
                             allow_redirects=True,
                             timeout=timeout or config.REQUEST_TIMEOUT)
         self.save_session()
+        d = config.debug_dir()
+        if d:
+            n = len(list(Path(d).glob("ajax-*.txt"))) + 1
+            (Path(d) / f"ajax-{n:02d}.txt").write_text(r.text, encoding="utf-8", errors="replace")
         if self.is_signon_shell(r.text):
             raise DeadSession("Session dead after AJAX submission")
         return r.text

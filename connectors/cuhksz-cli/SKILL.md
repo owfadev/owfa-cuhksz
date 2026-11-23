@@ -79,7 +79,7 @@ The course argument accepts a course id (`_18027_1`), a course code, or a name s
 | Need | Command |
 |---|---|
 | Weekly schedule + day-of-week timetable | `cuhksz-cli sis schedule --days --format text` |
-| Course catalog / sections & times for a term | `cuhksz-cli sis search [--term 'Term 2'] --subject AIE [--catalog 1904] [--contains] [--all-seats]` (read-only; open sections by default) |
+| Course catalog / sections & times for a term | `cuhksz-cli sis search [--term '2026-27 Term 2'] --subject AIE [--catalog 1904] [--contains] [--all-seats]` (read-only; open sections by default) |
 | My grades for a term | `cuhksz-cli sis grades [--term 'Term 2']` (default = newest term) |
 | Full course history | `cuhksz-cli sis history` |
 | Enrollment dates / registration window | `cuhksz-cli sis appt [--term 'Summer']` |

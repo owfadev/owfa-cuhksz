@@ -22,6 +22,8 @@ TERM_PAGE = """<!DOCTYPE html><html><body>
   <input type="hidden" name="ICSID" value="synthetic-page-sid">
   <input type="checkbox" name="SSR_CLSRCH_WRK_SSR_OPEN_ONLY$chk$3" value="Y" checked>
   <input type="checkbox" name="UNCHECKED$chk$9" value="Y">
+  <input type="hidden" name="ICSID" value="page-sid">
+  <input type="hidden" name="ICStateNum" value="217">
   <input type="text" name="SSR_CLSRCH_WRK_SUBJECT$0" value="">
   <input type="submit" name="SSR_CLSRCH_WRK2_SSR_PB_CLASS_SRCH" value="Search">
   <select name="CLASS_SRCH_WRK2_STRM$35$">
@@ -31,12 +33,21 @@ TERM_PAGE = """<!DOCTYPE html><html><body>
   </select>
 </form></body></html>"""
 
-# Step 1 answers with the state step 2 must copy back.
-STEP1_RESPONSE = """<html><body><form name="win0">
-  <input type="hidden" name="ICStateNum" value="27">
-  <input type="hidden" name="ICSID" value="synthetic-state-sid">
-  <input type="hidden" name="ICResubmit" value="0">
-</form></body></html>"""
+# Step 1 answers with the state step 2 must copy back. A live response is an
+# XML/JS page with no <input> tags: the state arrives as JS assignments and
+# ICSID is normally not echoed (verified live 2026-11-23).
+STEP1_RESPONSE = """<?xml version='1.0' encoding='utf-8' ?>
+<PAGE id='SSR_CLSRCH_ENTRY'><GENSCRIPT id='script'><![CDATA[var oWin=window;
+var oDoc = window.document;
+oDoc.win0.ICStateNum.value=218;
+oDoc.win0.ICResubmit.value='0';
+]]></GENSCRIPT></PAGE>"""
+
+# Full live-shaped dropdown: placeholders run far into the future.
+FULL_TERM_PAGE = "<html><body><form name='win0'><select name='CLASS_SRCH_WRK2_STRM$35$'>" + "".join(
+    f'<option value="{y % 100:02d}10">{y}-{str(y+1)[-2:]} Term 1</option>'
+    f'<option value="{y % 100:02d}20">{y}-{str(y+1)[-2:]} Term 2</option>'
+    for y in range(2014, 2036)) + "</select></form></body></html>"
 
 # Two CDATA blocks: the parser must concatenate them before reading the HTML.
 RESULT_PAYLOAD = (
@@ -128,6 +139,20 @@ class ParserTests(unittest.TestCase):
         self.assertIn("--catalog", data["notice"])
 
 
+    def test_ic_state_fields_reads_the_live_js_shape(self):
+        self.assertEqual(parser.ic_state_fields(STEP1_RESPONSE),
+                         {"ICStateNum": "218", "ICResubmit": "0"})
+        # An HTML-shaped payload keeps working; a missing field stays absent.
+        html_state = '<input type="hidden" name="ICStateNum" value="27">'
+        self.assertEqual(parser.ic_state_fields(html_state), {"ICStateNum": "27"})
+        self.assertEqual(parser.ic_state_fields("<PAGE/>"), {})
+
+    def test_default_term_skips_future_placeholders(self):
+        terms = parser.class_search_terms(FULL_TERM_PAGE)
+        self.assertEqual(parser.default_term(terms, year=2026)["label"], "2026-27 Term 2")
+        self.assertEqual(parser.default_term(terms, year=2020)["label"], "2020-21 Term 2")
+
+
 class ApiTests(unittest.TestCase):
     def test_term_matching_by_label_substring_and_by_strm(self):
         for requested, expected in (("Term 2", "2026-27 Term 2"), ("2620", "2026-27 Term 2"),
@@ -143,6 +168,14 @@ class ApiTests(unittest.TestCase):
         data = sis.class_search(subject="AIE")
         self.assertEqual(data["term"], "2026-27 Term 2")
         self.assertEqual(data["strm"], "2620")
+
+    def test_ambiguous_term_substring_is_refused_instead_of_picking_the_oldest(self):
+        sis = make_sis(FakeTransport(page=FULL_TERM_PAGE))
+        with self.assertRaises(SystemExit) as raised:
+            sis.class_search(term="Term 2", subject="AIE")
+        message = str(raised.exception)
+        self.assertIn("ambiguous", message)
+        self.assertIn("2026-27 Term 2 (2620)", message)
 
     def test_unknown_term_exits_with_the_available_options(self):
         sis = make_sis(FakeTransport())
@@ -192,9 +225,11 @@ class ApiTests(unittest.TestCase):
         # Step 2 — the search button + state copied back from step 1.
         self.assertEqual(step2["ICChanged"], "-1")
         self.assertEqual(step2["ICAction"], config.CLASS_SEARCH_ACTION)
-        self.assertEqual(step2["ICStateNum"], "27")
-        self.assertEqual(step2["ICSID"], "synthetic-state-sid")
+        # Live shape: ICStateNum/ICResubmit come from the step-1 JS payload;
+        # ICSID is not echoed, so the page value is carried over.
+        self.assertEqual(step2["ICStateNum"], "218")
         self.assertEqual(step2["ICResubmit"], "0")
+        self.assertEqual(step2["ICSID"], "page-sid")
         self.assertEqual(step2[config.CLASS_SEARCH_SUBJECT_FIELD], "AIE")
         self.assertEqual(step2[config.CLASS_SEARCH_CATALOG_FIELD], "1904")
 
@@ -237,7 +272,7 @@ class CliTests(unittest.TestCase):
             ["search", "--subject", "AIE", "--catalog", "1904"], make_sis(FakeTransport()))
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
-        self.assertIn("[2026-27 Term 2] subject=AIE catalog=1904 — 2 course(s)", out)
+        self.assertIn("[2026-27 Term 2 / 2620] subject=AIE catalog=1904 — 2 course(s)", out)
         self.assertIn("AIE 1904 - AI Exploration IV", out)
         self.assertIn("  L01-LEC(2278)  MoWe 10:00AM - 11:15AM / Fr 10:00AM - 10:50AM  Room 101  Prof A", out)
         self.assertIn("S01-SUP(2549)", out)

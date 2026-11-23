@@ -1,8 +1,8 @@
 ---
 name: sis-course
 owner: sis-course
-consumes: [sis, sis-course, trust, log]
-description: "Read-only course-catalog advisory on SIS Class Search: resolve the term → query by subject/catalog → present courses with sections, meeting times, rooms and instructors as 建议参考 — never pick courses for the user, never promise an optimal plan, never cart/enroll. Triggers on: sis-course, 选课, 课程表, class search, course catalog, 开课, 时间冲突, section, 下学期的课, 查课程, 有哪些课."
+consumes: [sis, sis-course, trust, log, index, hot]
+description: "Read-only course-catalog advisory on SIS Class Search: resolve the term → query by subject/catalog → present courses with sections, meeting times, rooms and instructors as 建议参考 — never pick courses for the user, never promise an optimal plan, never cart/enroll. Triggers on: sis-course, 选课清单, 开课查询, 下学期开什么课, class search, course catalog, 课号, 班号, 时间冲突, 查课程, 有哪些课."
 ---
 
 # sis-course: course-catalog advisory
