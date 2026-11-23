@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from datetime import date
 
 from . import config, parser
 from .auth import login
@@ -64,7 +63,7 @@ class Sis:
         """term-interaction component: GET the search page → pick a term → POST Continue → return {terms, term, html}.
 
         term=None picks the page's first entry (the newest); passing a
-        substring (e.g. 'Term 2') fuzzy-matches the term name.
+        label substring (e.g. '2026-27 Term 2') fuzzy-matches the term name.
         """
         html = self.component_html(name)
         terms = parser.parse_terms(html)
@@ -86,7 +85,8 @@ class Sis:
 
     def class_search(self, term: str | None = None, subject: str | None = None,
                      catalog: str | None = None, career: str | None = None,
-                     open_only: bool = True, contains: bool = False) -> dict:
+                     open_only: bool = True, contains: bool = False,
+                     all_sections: bool = False) -> dict:
         """Read-only Class Search: list courses and their sections/times for a term.
 
         SIS wants at least two criteria (a term plus a subject and/or catalog
@@ -95,7 +95,16 @@ class Sis:
         component (verified live 2026-11-23): a change-event POST primes the
         component state, then the search POST copies `ICStateNum`/`ICSID`/
         `ICResubmit` back and triggers `CLASS_SRCH_WRK2_SSR_PB_CLASS_SRCH`.
-        Advisory only: nothing is added to a cart and no state is changed.
+
+        `all_sections` expands every course that carries a "View All Sections"
+        action (SIS renders only the first 3 sections by default). Expansion
+        re-POSTs the same win0 action with the search fields + the state
+        echoed by the *current* payload + `ICChanged=-1` + the course's
+        `$ICFieldNNN$hviewall$0` action. A failure degrades to the rendered
+        sections for that course and records a structured note — it never
+        aborts the command. Advisory only: nothing is added to a cart and no
+        state is changed (only `ICAction=None`, the search button and the
+        hviewall query actions are ever sent).
         """
         if not subject and not catalog:
             raise SystemExit(
@@ -116,10 +125,7 @@ class Sis:
                 options = [f"{r['label']} ({r['strm']})" for r in terms]
                 raise SystemExit(f"Term not matched: {term!r}; available: {options}")
             if len(hits) > 1:
-                year = date.today().year
-                past = [r for r in hits if (parser.term_year(r["label"]) or 0) <= year][-3:]
-                future = [r for r in hits if (parser.term_year(r["label"]) or 0) > year][:3]
-                options = [f"{r['label']} ({r['strm']})" for r in past + future]
+                options = [f"{r['label']} ({r['strm']})" for r in parser.term_candidates(hits)]
                 raise SystemExit(
                     f"Term {term!r} is ambiguous — it matches {len(hits)} terms. "
                     f"Pass the full label or the strm code, e.g. one of: {options}")
@@ -154,13 +160,142 @@ class Sis:
         step2["ICAction"] = config.CLASS_SEARCH_ACTION
         payload = self.transport.post_ajax(action, step2, timeout=90)
         data = parser.parse_class_search(payload)
+        courses = data["courses"]
+        notes: list[dict] = []
+        if all_sections and courses:
+            courses, notes = self._expand_all_sections(action, step2, payload, courses)
+        # The raw page action is internal plumbing: keep only the derived,
+        # user-facing completeness flags in the output.
+        for course in courses:
+            course.pop("view_all_action", None)
         out = {"term": pick["label"], "strm": strm,
                "subject": subject, "catalog": catalog,
                "career": career or None, "open_only": open_only,
-               "contains": contains, "courses": data["courses"]}
+               "contains": contains, "all_sections": all_sections,
+               "courses": courses}
         if data.get("notice"):
             out["notice"] = data["notice"]
+        if notes:
+            out["notes"] = notes
         return out
+
+    # ---- Class Search: per-course "View All Sections" expansion ----
+    @staticmethod
+    def _course_key(courses: list[dict], index: int) -> tuple[str, int]:
+        """Stable identity of a result row: (course title, occurrence of that title)."""
+        title = courses[index]["course"]
+        occurrence = sum(1 for c in courses[:index] if c["course"] == title)
+        return title, occurrence
+
+    @staticmethod
+    def _find_course(courses: list[dict], key: tuple[str, int]) -> dict | None:
+        """The course matching `key` in this payload (titles may repeat)."""
+        title, occurrence = key
+        seen = 0
+        for course in courses:
+            if course["course"] != title:
+                continue
+            if seen == occurrence:
+                return course
+            seen += 1
+        return None
+
+    @classmethod
+    def _merge_expanded(cls, base: list[dict], response: list[dict],
+                        key: tuple[str, int]) -> list[dict] | None:
+        """Fold an expansion response into the accumulated result.
+
+        The live response is the full result page with the target course
+        expanded. `None` means the response carried no usable target and the
+        caller must degrade instead of accepting a half-empty payload. A
+        previously expanded course keeps its longer section list even if a
+        later response renders it collapsed again.
+        """
+        target = cls._find_course(response, key)
+        if target is None or not target.get("sections"):
+            return None
+        base_keys = [cls._course_key(base, i) for i in range(len(base))]
+        out: list[dict] = []
+        for i, course in enumerate(base):
+            course_key = base_keys[i]
+            fresh = cls._find_course(response, course_key)
+            if course_key == key:
+                expanded = dict(fresh)
+                expanded["sections_complete"] = True
+                expanded["sections_expanded"] = True
+                out.append(expanded)
+            elif course.get("sections_expanded"):
+                kept = dict(course)
+                if fresh is not None:
+                    kept["view_all_action"] = fresh.get("view_all_action")
+                out.append(kept)
+            elif fresh is not None:
+                out.append(fresh)
+            else:
+                out.append(course)
+        for i, course in enumerate(response):
+            if cls._course_key(response, i) not in base_keys:
+                out.append(course)
+        return out
+
+    def _expand_all_sections(self, action_url: str, search_fields: dict[str, str],
+                             payload: str, courses: list[dict]) -> tuple[list[dict], list[dict]]:
+        """Expand up to `CLASS_SEARCH_MAX_EXPANSIONS` courses; never abort the command.
+
+        Each iteration re-parses the *current* payload before building the
+        request: expanding a course rewrites the page's `$ICFieldNNN$` action
+        names, so a remembered action is not trustworthy. The target is
+        located by course position/title (never by the field number).
+        """
+        notes: list[dict] = []
+        targets = [self._course_key(courses, i) for i, c in enumerate(courses)
+                   if c.get("view_all_action")]
+        cap = config.CLASS_SEARCH_MAX_EXPANSIONS
+        if len(targets) > cap:
+            notes.append({
+                "kind": "expansion_cap",
+                "detail": (f"{len(targets)} courses offer 'View All Sections'; only the "
+                           f"first {cap} were expanded — the rest keep the first-3-section "
+                           f"view (raise CLASS_SEARCH_MAX_EXPANSIONS only knowingly)"),
+                "expandable": len(targets), "cap": cap})
+            targets = targets[:cap]
+        for key in targets:
+            # Re-parse the CURRENT payload: action names shift after an expansion.
+            fresh = parser.parse_class_search(payload)
+            matched = self._find_course(fresh["courses"], key)
+            action = matched.get("view_all_action") if matched else None
+            if not action:  # fall back to the accumulated row (partial payload)
+                accumulated = self._find_course(courses, key)
+                action = accumulated.get("view_all_action") if accumulated else None
+            if not action or not parser.HVIEWALL_ACTION.fullmatch(action):
+                notes.append({
+                    "kind": "expansion_failed", "course": key[0],
+                    "detail": "no View All Sections action in the current result payload; "
+                              "the rendered sections were kept"})
+                continue
+            fields = dict(search_fields)
+            fields.update(parser.ic_state_fields(payload))
+            fields["ICChanged"] = "-1"
+            fields["ICAction"] = action
+            try:
+                expanded_payload = self.transport.post_ajax(
+                    action_url, fields, timeout=config.CLASS_SEARCH_EXPANSION_TIMEOUT)
+                parsed = parser.parse_class_search(expanded_payload)
+            except Exception as exc:  # network/timeout/parse: degrade, never abort
+                notes.append({
+                    "kind": "expansion_failed", "course": key[0],
+                    "detail": f"{type(exc).__name__}; the rendered sections were kept"})
+                continue
+            merged = self._merge_expanded(courses, parsed["courses"], key)
+            if merged is None:
+                notes.append({
+                    "kind": "expansion_failed", "course": key[0],
+                    "detail": "the expansion response carried no matching course; "
+                              "the rendered sections were kept"})
+                continue
+            courses = merged
+            payload = expanded_payload
+        return courses, notes
 
     def schedule_with_days(self) -> dict:
         """Weekly schedule + day-of-week attribution from the student center page (the center page is the authoritative source)."""

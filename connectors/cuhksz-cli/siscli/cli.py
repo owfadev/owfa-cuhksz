@@ -7,14 +7,25 @@ import argparse
 import getpass
 import json
 import os
+import re
 import sys
 
 from . import config, parser
 from .api import Sis
 
+# Section-code suffix → grouping for text output. GE courses mix LEC and TUT
+# (e.g. 12 LEC + 34 TUT for GFH 1000); the tutorial group is what occupies the
+# timetable, so the two must not be flattened into one list.
+_SECTION_TYPE = re.compile(r"-([A-Z]{2,4})\(")
+_SECTION_TYPE_ORDER = ("LEC", "TUT", "SUP", "LAB", "SEM")
+
 
 def _fmt(obj) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
 
 
 def cmd_status(sis: Sis, args) -> int:
@@ -139,25 +150,70 @@ def cmd_schedule(sis: Sis, args) -> int:
     return 0
 
 
+def _section_line(sec: dict) -> str:
+    when = " / ".join(sec["times"]) or "-"
+    return f"{sec['section']}  {when}  {sec['room'] or ''}  {sec['instructor'] or ''}".rstrip()
+
+
+def _section_groups(sections: list[dict]) -> dict[str, list[dict]]:
+    """Group sections by the LEC/TUT/SUP/LAB/SEM suffix of the section code."""
+    groups: dict[str, list[dict]] = {}
+    for sec in sections:
+        m = _SECTION_TYPE.search(sec["section"])
+        groups.setdefault(m.group(1) if m else "OTHER", []).append(sec)
+    return groups
+
+
+def _section_order(groups: dict[str, list[dict]]) -> list[str]:
+    order = [t for t in _SECTION_TYPE_ORDER if t in groups]
+    order += [t for t in groups if t not in _SECTION_TYPE_ORDER and t != "OTHER"]
+    if "OTHER" in groups:
+        order.append("OTHER")
+    return order
+
+
+def _course_header(course: dict, all_sections: bool) -> str:
+    """Header carrying the section count and the completeness signal."""
+    count = _plural(len(course["sections"]), "section")
+    if course.get("sections_expanded"):
+        return f"{course['course']}  — {count} (all)"
+    if not course.get("sections_complete", True):
+        why = ("expansion failed; first 3 shown" if all_sections
+               else "first 3 shown; --all-sections to expand")
+        return f"{course['course']}  — {count} ({why})"
+    return f"{course['course']}  — {count}"
+
+
 def cmd_search(sis: Sis, args) -> int:
     data = sis.class_search(term=args.term, subject=args.subject, catalog=args.catalog,
                             career=args.career, open_only=not args.all_seats,
-                            contains=args.contains)
+                            contains=args.contains, all_sections=args.all_sections)
     if args.format == "json":
         print(_fmt(data))
         return 0
     if data.get("notice"):
         print(f"[notice] {data['notice']}")
         return 0
-    print(f"[{data['term']} / {data['strm']}] subject={data['subject'] or '-'} "
-          f"catalog={data['catalog'] or '-'} — {len(data['courses'])} course(s)")
+    header = (f"[{data['term']} / {data['strm']}] subject={data['subject'] or '-'} "
+              f"catalog={data['catalog'] or '-'} — {len(data['courses'])} course(s)")
+    if data.get("all_sections"):
+        header += " [all sections]"
+    print(header)
+    for note in data.get("notes", []):
+        subject = f"{note['course']}: " if note.get("course") else ""
+        print(f"[note] {subject}{note.get('detail', note.get('kind', ''))}")
     for course in data["courses"]:
         print("")
-        print(course["course"])
-        for sec in course["sections"]:
-            when = " / ".join(sec["times"]) or "-"
-            print(f"  {sec['section']}  {when}  {sec['room'] or ''}  "
-                  f"{sec['instructor'] or ''}".rstrip())
+        print(_course_header(course, bool(data.get("all_sections"))))
+        groups = _section_groups(course["sections"])
+        if len(groups) > 1:
+            for section_type in _section_order(groups):
+                print(f"  {section_type}:")
+                for sec in groups[section_type]:
+                    print(f"    {_section_line(sec)}")
+        else:
+            for sec in course["sections"]:
+                print(f"  {_section_line(sec)}")
     return 0
 
 
@@ -303,12 +359,17 @@ def main(argv=None) -> int:
 
     # Read-only class search (course catalog + section times): advisory only.
     p = sub.add_parser("search", help="class search: list courses and their sections/times for a term (read-only)")
-    p.add_argument("--term", help="term label substring or strm code (defaults to the newest term)")
+    p.add_argument("--term", help="term strm code or label substring; a substring must match exactly one term "
+                                  "(ambiguous ones are refused with candidate terms); omitted = the newest term "
+                                  "whose start year is not in the future")
     p.add_argument("--subject", help="subject code (e.g. AIE, CSC, ENG)")
     p.add_argument("--catalog", help="catalog number (e.g. 1904); combine with --subject")
     p.add_argument("--contains", action="store_true", help="match the catalog number by contains instead of exact")
     p.add_argument("--career", help="academic career (leave empty: SIS returns 0 results for UGCU)")
     p.add_argument("--all-seats", action="store_true", help="include closed/full sections (default: open only)")
+    p.add_argument("--all-sections", action="store_true",
+                   help="expand every course's 'View All Sections' list (default: SIS renders only "
+                        "the first 3 sections per course; expansion is one read-only request per course, capped)")
     p.add_argument("--format", choices=["text", "json"], default="text")
 
     for comp, label in [
@@ -319,7 +380,8 @@ def main(argv=None) -> int:
         p = sub.add_parser(comp, help=label)
         p.add_argument("--format", choices=["text", "json"], default="text")
         if comp != "history":
-            p.add_argument("--term", help="term substring (defaults to the newest; e.g. 'Term 2')")
+            p.add_argument("--term", help="term label substring (defaults to the page's newest term; "
+                                          "e.g. '2026-27 Term 2')")
 
     p = sub.add_parser("center", help="student center page (text summary)")
     p.add_argument("--format", choices=["text", "json"], default="text")

@@ -31,7 +31,7 @@ examples:
   cuhksz-cli bb courses --format text
   cuhksz-cli bb status
   cuhksz-cli sis schedule --days
-  cuhksz-cli sis grades --term 'Term 2'
+  cuhksz-cli sis grades --term '2026-27 Term 2'
   cuhksz-cli home status
   cuhksz-cli home migrate --dry-run
 """

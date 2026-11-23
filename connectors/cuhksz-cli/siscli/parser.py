@@ -16,6 +16,8 @@ from . import config
 
 _COURSE_CODE = re.compile(r"^[A-Z]{2,4}\s\d{3,4}\s-\s[A-Z]\d{2}")
 _COURSE_CODE_TIGHT = re.compile(r"^[A-Z]{2,4}\s\d{3,4}$")
+# Unanchored label scan: term names are embedded in a larger text block
+# (radio rows, grade/appt result pages), so it must match mid-string.
 _TERM_LABEL = re.compile(r"\d{4}-\d{2}\s+(?:Term\s+\d|Summer Session)")
 
 
@@ -98,12 +100,20 @@ def ic_state_fields(payload: str) -> dict[str, str]:
     return out
 
 
-_TERM_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Session)", re.I)
+# Anchored dropdown-label pattern: only starts of option labels, and it
+# captures the start year. Kept separate from the unanchored `_TERM_LABEL`
+# above — assigning one name twice used to shadow the unanchored scan.
+_TERM_DROPDOWN_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Session)", re.I)
+
+
+def _today() -> date:
+    """Clock seam: tests inject a fixed date instead of patching `date.today`."""
+    return date.today()
 
 
 def term_year(label: str) -> int | None:
     """Start year of a term label ("2026-27 Term 2" → 2026); None when unparseable."""
-    m = _TERM_LABEL.match(label)
+    m = _TERM_DROPDOWN_LABEL.match(label)
     return int(m.group(1)) if m else None
 
 
@@ -124,14 +134,39 @@ def default_term(terms: list[dict], year: int | None = None) -> dict | None:
     """
     if not terms:
         return None
-    y = year if year is not None else date.today().year
+    y = year if year is not None else _today().year
     candidates = []
     for r in terms:
-        m = _TERM_LABEL.match(r["label"])
+        m = _TERM_DROPDOWN_LABEL.match(r["label"])
         if m and int(m.group(1)) <= y:
             candidates.append(r)
     return candidates[-1] if candidates else terms[-1]
+
+
+def term_candidates(hits: list[dict], today: date | None = None,
+                    window: int = 3) -> list[dict]:
+    """Candidates shown for an ambiguous term query: a few past + coming terms.
+
+    The matching is deliberately not silent: when more than one term matches a
+    substring, the caller refuses and lists this window around the current
+    year (the dropdown runs to placeholder years far ahead, so showing the
+    first N matches would be misleading).
+    """
+    today = today or _today()
+    year = today.year
+    past = [r for r in hits if (term_year(r["label"]) or 0) <= year][-window:]
+    future = [r for r in hits if (term_year(r["label"]) or 0) > year][:window]
+    return past + future
+
+
 _CLASS_SEARCH_WARNING = re.compile(r"<PAGE[^>]*id=['\"]SSR_SS_WARNING['\"]", re.I)
+
+# "View All Sections" link: SIS renders only the first 3 sections per course
+# and offers one expansion action per course in the result payload, shaped
+# `javascript:submitAction_win0(document.win0,'$ICFieldNNN$hviewall$0')`
+# (verified live 2026-11-23).
+HVIEWALL_ACTION = re.compile(r"\$ICField\d+\$hviewall\$\d+")
+_HVIEWALL_SUFFIX = re.compile(r"\$hviewall\$(\d+)$")
 
 
 def parse_class_search(payload: str) -> dict:
@@ -144,6 +179,12 @@ def parse_class_search(payload: str) -> dict:
     `win0divDERIVED_CLSRCH_DESCR200$…` divs; a section is a
     `DERIVED_CLSRCH_SSR_CLASSNAME_LONG$…` element; meeting rows contribute
     `MTG_DAYTIME` times (1–2 per section), the first `MTG_ROOM`/`MTG_INSTR`.
+
+    Each course also carries `view_all_action` (the "View All Sections" action
+    name when SIS rendered only the first 3 sections) and the derived flags
+    `sections_complete` / `sections_expanded`. The action is attached to the
+    course whose group contains that anchor in document order — the
+    `$ICFieldNNN$` number is page state, never a stable course identity.
     """
     if "over 50 classes" in payload or _CLASS_SEARCH_WARNING.search(payload):
         return {"courses": [], "notice": (
@@ -156,13 +197,14 @@ def parse_class_search(payload: str) -> dict:
     courses: list[dict] = []
     current: dict | None = None
     section: dict | None = None
-    for el in soup.find_all(id=True):
+    for el in soup.find_all(True):
         eid = el.get("id") or ""
         if (eid.startswith("win0divDERIVED_CLSRCH_DESCR200$")
                 or eid.startswith("DERIVED_CLSRCH_DESCR200$")):
             text = el.get_text(" ", strip=True)
             if text and (current is None or text != current["course"]):
-                current = {"course": text, "sections": []}
+                current = {"course": text, "sections": [], "view_all_action": None,
+                           "sections_complete": True, "sections_expanded": False}
                 courses.append(current)
                 section = None
         elif eid.startswith("DERIVED_CLSRCH_SSR_CLASSNAME_LONG$") and "span" not in eid:
@@ -178,7 +220,37 @@ def parse_class_search(payload: str) -> dict:
             section["room"] = el.get_text(" ", strip=True) or None
         elif section is not None and eid.startswith("MTG_INSTR") and section["instructor"] is None:
             section["instructor"] = el.get_text(" ", strip=True) or None
+        else:
+            action = _view_all_action(el)
+            if (action and current is not None
+                    and current.get("view_all_action") is None):
+                current["view_all_action"] = action
+    # Fallback for payloads whose anchors the HTML parser cannot see (e.g. a
+    # bare JS echo): the suffix is the course position in the result list.
+    if courses and not any(c.get("view_all_action") for c in courses):
+        seen: set[str] = set()
+        for action in HVIEWALL_ACTION.findall(html):
+            if action in seen:
+                continue
+            seen.add(action)
+            m = _HVIEWALL_SUFFIX.search(action)
+            if m and 0 <= int(m.group(1)) < len(courses):
+                courses[int(m.group(1))]["view_all_action"] = action
+    for course in courses:
+        course["sections_complete"] = not bool(course.get("view_all_action"))
     return {"courses": courses}
+
+
+def _view_all_action(el) -> str | None:
+    """`$ICFieldNNN$hviewall$0` carried by a link element (href/onclick/name/id)."""
+    for attr in ("href", "onclick", "name", "id"):
+        value = el.get(attr)
+        if not value:
+            continue
+        m = HVIEWALL_ACTION.search(value)
+        if m:
+            return m.group(0)
+    return None
 
 
 def parse_grade_report(html: str) -> dict:

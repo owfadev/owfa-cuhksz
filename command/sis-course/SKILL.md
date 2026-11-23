@@ -18,11 +18,11 @@ Read: cuhksz-cli sis (`search` for the catalog, `status` for the session), `wiki
 
 ## Steps
 
-1. **Resolve the term**: `cuhksz-cli sis status` first (offline evidence; if `relogin` is blocked, follow the login discipline in the cuhksz-cli skill). Then let `search` resolve the term: `--term` accepts a label substring (`'Term 2'`) or the strm code (`2620`); when the user names no term, the command defaults to the newest and echoes it — **state the resolved term in the answer**. If the term cannot be matched, show the available terms and ask, do not guess
-2. **Query by subject and/or catalog**: SIS needs at least two criteria (the term plus a subject and/or catalog), so always query with `--subject <code>` and/or `--catalog <number>`; `--contains` turns the catalog match into contains. Add `--all-seats` only when the user asks about closed sections (the default is open sections only)
-3. **Present courses + sections + times**: per course, a header line (`AIE 1904 - AI Exploration IV`), then each section (`L01-LEC(2278)` / `S01-SUP(2549)` …) with its meeting time(s) joined by ` / `, room and instructor. Sections with no fixed meeting (SUP) are marked as such. Keep the resolved term and the filters visible above the list
+1. **Resolve the term**: `cuhksz-cli sis status` first (offline evidence; if `relogin` is blocked, follow the login discipline in the cuhksz-cli skill). Then let `search` resolve the term: `--term` accepts the strm code (`2620`) or a full label (`'2026-27 Term 2'`); a bare substring like `'Term 2'` matches many years and is **refused with candidate terms** (pass the strm or the full label). When the user names no term, the command resolves the newest term whose start year is not after the current year and echoes it — **state the resolved term in the answer**. If the term cannot be matched, show the available terms and ask, do not guess
+2. **Query by subject and/or catalog**: SIS needs at least two criteria (the term plus a subject and/or catalog), so always query with `--subject <code>` and/or `--catalog <number>`; `--contains` turns the catalog match into contains. Add `--all-seats` only when the user asks about closed sections (the default is open sections only). Add `--all-sections` when the section list matters — SIS renders only the first 3 per course by default, and expansion costs one read-only request per course
+3. **Present courses + sections + times**: per course, a header line with the section count and completeness marker (`AIE 1904 - AI Exploration IV — 8 sections (all)` / `— 3 sections (first 3 shown; --all-sections to expand)`), then each section (`L01-LEC(2278)` / `S01-SUP(2549)` …) with its meeting time(s) joined by ` / `, room and instructor. When a course mixes section types the text output groups them (`LEC:` then `TUT:` …), because a GE course's tutorial is what occupies the timetable. Sections with no fixed meeting (SUP) are marked as such. Keep the resolved term and the filters visible above the list
 4. **Frame the output as 建议参考**: relate the list to the user's stated constraints (interests, time conflicts against the calendar, term load) and explain the trade-offs — but explicitly say the choice is the user's. **Never call a plan optimal, never choose for the user, never add anything to a cart**; the final authority is SIS and the academic regulations
-5. **Keep the limits honest**: only the first 3 sections per course are rendered by default (PeopleSoft pagination) and a query over ~50 classes returns a structured notice — narrow with `--catalog` / `--contains` instead of presenting a short list as exhaustive, and never imply a section is guaranteed to have a seat
+5. **Keep the limits honest**: SIS renders only the first 3 sections per course by default; `--all-sections` expands every course with a "View All Sections" link (capped, one request per course, and a failed expansion degrades to the 3 rendered sections with a structured note) — use it when the tutorial/section choice matters, and never present a short list as exhaustive. A query over ~50 classes returns a structured notice — narrow with `--catalog` / `--contains`. Never imply a section is guaranteed to have a seat
 6. **Optional save** (explicit request only): write one comparison page under `wiki/cuhksz/sis/` with the `course_catalog` mapping + `fetched_at`/`stale_after` and a backlink to the query; then the post-write pipeline + a log line
 7. Report: resolved term / filters / course and section counts / the advisory framing
 
@@ -30,7 +30,7 @@ Read: cuhksz-cli sis (`search` for the catalog, `status` for the session), `wiki
 
 - **Never** enroll, add to cart, drop/swap, submit, or perform any state-changing transaction; the only network flow is the read-only Class Search query
 - Never present the output as an optimal or final choice, never make the decision for the user, never promise seat availability or an enrollment outcome
-- Never hide the 3-section pagination limit or the 50-class notice when they affect the answer; never invent a section/time that the query did not return
+- Never hide the 3-section default, the `--all-sections` cap/expansion failure, or the 50-class notice when they affect the answer; never invent a section/time that the query did not return
 - Never paste raw SIS HTML (contains personal data) or credentials into the answer or any repository; student data stays in the conversation on the local machine
 - Do not write a comparison page unless the user explicitly asks; catalog data is regenerable, so a default archive only drifts
 
@@ -40,9 +40,9 @@ Output language takes the default key of the language declaration page `wiki/lan
 
 ## Parameters
 
-- Term (label substring or strm code; omittable = newest, echoed in the answer)
+- Term (strm code or a full label; an ambiguous substring is refused with candidates; omittable = the newest term whose start year is not in the future, echoed in the answer)
 - Subject and/or catalog number (at least one is required by SIS; both can be combined)
-- `--contains` (catalog contains match), `--all-seats` (include closed sections), `--format text|json`
+- `--contains` (catalog contains match), `--all-seats` (include closed sections), `--all-sections` (expand the per-course section list), `--format text|json`
 
 ## Injected Section (plugin usage blocks)
 
@@ -50,9 +50,9 @@ Output language takes the default key of the language declaration page `wiki/lan
 
 <!-- cmd-inject:start -->
 <!-- usage:sis-course -->
-- Resolve the term first: `cuhksz-cli sis search --subject <code>` echoes the resolved term; `--term` accepts a label substring ('Term 2') or the strm code, omitted = the newest term. State the resolved term in the answer
-- Query with at least two criteria (term + subject and/or catalog): `cuhksz-cli sis search --subject AIE --catalog 1904`. A subject alone may exceed the server's 50-class ceiling (structured notice) and only the first 3 sections per course are rendered — narrow with --catalog/--contains and never present a short list as exhaustive
-- Present as 建议参考: courses → sections (L01-LEC / S01-SUP …) → meeting times / room / instructor. Compare against the user's stated constraints (term, time conflicts, interests) but leave the choice with the user — never call a schedule optimal, never auto-add to a cart, never promise an enrollment outcome
+- Resolve the term first: `cuhksz-cli sis search --subject <code>` echoes the resolved term; `--term` accepts the strm code or a full label (`'2026-27 Term 2'`); a bare substring like `'Term 2'` is refused as ambiguous with candidate terms; omitted = the newest term whose start year is not in the future. State the resolved term in the answer
+- Query with at least two criteria (term + subject and/or catalog): `cuhksz-cli sis search --subject AIE --catalog 1904`. A subject alone may exceed the server's 50-class ceiling (structured notice); SIS renders only the first 3 sections per course by default, so add `--all-sections` when the section/tutorial list matters (capped, one request per course; a failed expansion degrades with a note) — narrow with --catalog/--contains and never present a short list as exhaustive
+- Present as 建议参考: courses → sections (grouped `LEC:` / `TUT:` when a course mixes types; L01-LEC / S01-SUP …) → meeting times / room / instructor. Compare against the user's stated constraints (term, time conflicts, interests) but leave the choice with the user — never call a schedule optimal, never auto-add to a cart, never promise an enrollment outcome
 - Only on an explicit request to keep the comparison, save a notes page (term/filters + fetched_at + stale_after + backlink); otherwise write no page — the data is fully regenerable from SIS
 <!-- /usage:sis-course -->
 

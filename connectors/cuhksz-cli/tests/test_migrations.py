@@ -12,10 +12,37 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-REPO = Path(__file__).resolve().parents[3]
-INIT_PY = REPO / "migrations" / "init.py"
 DEFAULT_HELPER = "~/dev/owfa/.owfa/scripts/owfa_home.py"
 HELPER = Path(os.environ.get("OWFA_HOME_HELPER") or DEFAULT_HELPER).expanduser()
+
+
+def find_migrations_init(start: Path | None = None) -> Path | None:
+    """Locate `migrations/init.py` without assuming the package-source depth.
+
+    Two supported layouts, searched upward from this test file (or `start`):
+    the package source (`<repo>/migrations/init.py`) and an installed domain
+    (`<instance>/.owfa/plugins/domains/<pkg>/migrations/init.py`). Returns
+    None when neither exists so the suite skips instead of erroring.
+    """
+    probe = (start or Path(__file__)).resolve()
+    base = probe if probe.is_dir() else probe.parent
+    for parent in (base, *base.parents):
+        direct = parent / "migrations" / "init.py"
+        if direct.is_file():
+            return direct
+        domains = parent / ".owfa" / "plugins" / "domains"
+        if not domains.is_dir():
+            continue
+        matches = sorted(domains.glob("*/migrations/init.py"))
+        for candidate in matches:  # prefer this package when several are installed
+            if candidate.parent.parent.name == "cuhksz":
+                return candidate
+        if matches:
+            return matches[0]
+    return None
+
+
+INIT_PY = find_migrations_init()
 
 
 def load_verify():
@@ -45,6 +72,39 @@ def write_identity(root: Path) -> None:
     page.write_text("---\ntype: cuhksz\n---\nstudent_id: 000000000\n", encoding="utf-8")
 
 
+class LocatorTests(unittest.TestCase):
+    def test_finds_the_package_source_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init = root / "migrations" / "init.py"
+            init.parent.mkdir(parents=True)
+            init.write_text("", encoding="utf-8")
+            probe = root / "connectors" / "pkg" / "tests" / "test_x.py"
+            probe.parent.mkdir(parents=True)
+            probe.write_text("", encoding="utf-8")
+            self.assertEqual(find_migrations_init(probe), init)
+
+    def test_finds_the_installed_domain_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init = root / ".owfa" / "plugins" / "domains" / "cuhksz" / "migrations" / "init.py"
+            init.parent.mkdir(parents=True)
+            init.write_text("", encoding="utf-8")
+            probe = root / "wiki" / "tmp" / "probe.py"
+            probe.parent.mkdir(parents=True)
+            probe.write_text("", encoding="utf-8")
+            self.assertEqual(find_migrations_init(probe), init)
+
+    def test_returns_none_when_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = Path(tmp) / "a" / "b" / "probe.py"
+            probe.parent.mkdir(parents=True)
+            probe.write_text("", encoding="utf-8")
+            self.assertIsNone(find_migrations_init(probe))
+
+
+@unittest.skipUnless(INIT_PY is not None,
+                     "migrations/init.py not found (neither package source nor installed domain)")
 class InitVerifyTests(unittest.TestCase):
     def test_missing_identity_is_an_error(self):
         with isolated("") as (_, workspace):

@@ -43,7 +43,7 @@ The `BB_CLI_HOME` / `SIS_CLI_HOME` environment variables remain honoured as expl
 ## Scope
 
 - bb backend — read: courses / assignments / grades / announcements / course files / my submissions / members; write: none (read-only by design; submitting assignments or posting announcements is deliberately not provided — would require explicit user instruction and separate design)
-- sis backend — read: weekly schedule with day-of-week / per-term grades / course history / enrollment dates / exam schedule / student center / transcript / **class search (course catalog + section times)**; write: none. **Enrollment actions (add/drop/swap classes) and any state-changing transaction are deliberately NOT provided**; the user risks academic penalties for misuse, so never attempt them via raw or any other route. The only POSTs the CLI ever makes are query actions on PeopleSoft search pages: the term-selection "Continue", and the two-step Class Search AJAX flow — both pure queries
+- sis backend — read: weekly schedule with day-of-week / per-term grades / course history / enrollment dates / exam schedule / student center / transcript / **class search (course catalog + section times, with the optional `--all-sections` expansion)**; write: none. **Enrollment actions (add/drop/swap classes) and any state-changing transaction are deliberately NOT provided**; the user risks academic penalties for misuse, so never attempt them via raw or any other route. The only POSTs the CLI ever makes are query actions on PeopleSoft search pages: the term-selection "Continue", the two-step Class Search AJAX flow, and each course's `View All Sections` expansion — all pure queries
 
 ## Prerequisites (install / auth)
 
@@ -79,8 +79,8 @@ The course argument accepts a course id (`_18027_1`), a course code, or a name s
 | Need | Command |
 |---|---|
 | Weekly schedule + day-of-week timetable | `cuhksz-cli sis schedule --days --format text` |
-| Course catalog / sections & times for a term | `cuhksz-cli sis search [--term '2026-27 Term 2'] --subject AIE [--catalog 1904] [--contains] [--all-seats]` (read-only; open sections by default) |
-| My grades for a term | `cuhksz-cli sis grades [--term 'Term 2']` (default = newest term) |
+| Course catalog / sections & times for a term | `cuhksz-cli sis search [--term '2026-27 Term 2'] --subject AIE [--catalog 1904] [--contains] [--all-seats] [--all-sections]` (read-only; open sections by default; `--all-sections` expands the first-3 view) |
+| My grades for a term | `cuhksz-cli sis grades [--term '2026-27 Term 2']` (default = the page's newest term) |
 | Full course history | `cuhksz-cli sis history` |
 | Enrollment dates / registration window | `cuhksz-cli sis appt [--term 'Summer']` |
 | Exam schedule | `cuhksz-cli sis exam` (empty when not yet published) |
@@ -112,7 +112,7 @@ For timetable or next-class questions in a wiki instance, first read `wiki/calen
 ## Known limits
 
 - bb: 404 under student sessions for `gradebook/attempts` (flat), `discussion/forums`, `users/me/memberships`, `tasks`, `gradebook/grades`; Classic (JSP) courses only, Ultra unverified; write operations deliberately not provided
-- sis: `exam` returns empty until the school publishes the term's exam schedule; `assignments` (per-assignment gradebook) usually shows "no information" — use `grades`; Tuition/Finances and enrollment-cart read views not registered — explore via `raw` first, then wrap; `search` renders only the first 3 sections per course (PeopleSoft pagination) and refuses queries over 50 classes with a notice; PIA upgrades or sign-in page changes break the chain — re-run with `SIS_CLI_DEBUG=<dir>` to capture evidence
+- sis: `exam` returns empty until the school publishes the term's exam schedule; `assignments` (per-assignment gradebook) usually shows "no information" — use `grades`; Tuition/Finances and enrollment-cart read views not registered — explore via `raw` first, then wrap; `search` renders only the first 3 sections per course by default — `--all-sections` expands every course with a "View All Sections" link (sequential, one read-only request per course, capped at 30; a failed expansion degrades to the rendered sections with a structured note) — and refuses queries over 50 classes with a notice; PIA upgrades or sign-in page changes break the chain — re-run with `SIS_CLI_DEBUG=<dir>` to capture evidence
 - bb raw pass-through accepts GET only; sis raw POST is restricted to registered components
 
 ## Prohibitions
