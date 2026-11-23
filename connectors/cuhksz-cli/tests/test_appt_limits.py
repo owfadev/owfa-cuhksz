@@ -296,7 +296,7 @@ class TermStrmTests(unittest.TestCase):
         sis = Sis.__new__(Sis)
         sis.cfg = {}
         sis.transport = FakeTermTransport()
-        # "Term 2" also matches 2026-27 Term 2 (idx 4), but an explicit query
+        # "Term 2" also matches 2026-27 Term 2 (idx 3), but an explicit query
         # keeps the first page-order hit — unchanged from 0.4.2.
         result = sis.term_query("appt", "Term 2")
         self.assertEqual(result["term"], "2025-26 Term 2")
