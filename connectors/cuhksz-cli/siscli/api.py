@@ -62,16 +62,19 @@ class Sis:
     def term_query(self, name: str, term: str | None = None) -> dict:
         """term-interaction component: GET the search page → pick a term → POST Continue → return {terms, term, html}.
 
-        term=None picks the page's first entry (the newest); passing an exact
+        term=None picks the newest term by academic-year/session label ordering
+        (the radio order differs per component: `grades` is newest-first,
+        `appt`/`exam` are oldest-first, so page position is never trusted). Passing an exact
         strm code (e.g. '2620') or a label substring (e.g. '2026-27 Term 2')
-        chooses the term. The term-search page carries labels only, so a strm
-        is matched against the code derived from each label.
+        chooses the term, the substring matching the first hit in page order.
+        The term-search page carries labels only, so a strm is matched against
+        the code derived from each label.
         """
         html = self.component_html(name)
         terms = parser.parse_terms(html)
         if not terms:
             return {"terms": [], "term": None, "html": html}  # no radios: the page is already the result
-        pick = terms[0]
+        pick = parser.newest_term(terms)
         if term:
             for t in terms:
                 if parser.term_strm(t["term"]) == term:
@@ -277,7 +280,7 @@ class Sis:
                 action = accumulated.get("view_all_action") if accumulated else None
             if not action or not parser.HVIEWALL_ACTION.fullmatch(action):
                 notes.append({
-                    "kind": "expansion_failed", "course": key[0],
+                    "kind": "expansion_failed", "course": key[0], "occurrence": key[1],
                     "detail": "no View All Sections action in the current result payload; "
                               "the rendered sections were kept"})
                 continue
@@ -291,13 +294,13 @@ class Sis:
                 parsed = parser.parse_class_search(expanded_payload)
             except Exception as exc:  # network/timeout/parse: degrade, never abort
                 notes.append({
-                    "kind": "expansion_failed", "course": key[0],
+                    "kind": "expansion_failed", "course": key[0], "occurrence": key[1],
                     "detail": f"{type(exc).__name__}; the rendered sections were kept"})
                 continue
             merged = self._merge_expanded(courses, parsed["courses"], key)
             if merged is None:
                 notes.append({
-                    "kind": "expansion_failed", "course": key[0],
+                    "kind": "expansion_failed", "course": key[0], "occurrence": key[1],
                     "detail": "the expansion response carried no matching course; "
                               "the rendered sections were kept"})
                 continue

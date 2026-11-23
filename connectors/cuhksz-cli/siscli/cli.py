@@ -194,15 +194,22 @@ def _capped_course_ids(data: dict) -> set[int]:
     `CLASS_SEARCH_MAX_EXPANSIONS`. Attempted expansions either succeed
     (`sections_expanded`) or record an `expansion_failed` note, so the courses
     still incomplete and unnamed by such a note were never attempted.
+
+    Rows are keyed by (course title, occurrence of that title) — the identity
+    `Sis._course_key` uses — because a title may repeat in one result: keying
+    by title alone would exclude a never-attempted duplicate together with a
+    failed one.
     """
     notes = data.get("notes", [])
     if not any(n.get("kind") == "expansion_cap" for n in notes):
         return set()
-    failed = {n.get("course") for n in notes if n.get("kind") == "expansion_failed"}
-    return {id(c) for c in data["courses"]
+    courses = data["courses"]
+    failed = {(n.get("course"), n.get("occurrence", 0))
+              for n in notes if n.get("kind") == "expansion_failed"}
+    return {id(c) for i, c in enumerate(courses)
             if not c.get("sections_complete", True)
             and not c.get("sections_expanded")
-            and c["course"] not in failed}
+            and Sis._course_key(courses, i) not in failed}
 
 
 def cmd_search(sis: Sis, args) -> int:
@@ -391,8 +398,9 @@ def main(argv=None) -> int:
     # Read-only class search (course catalog + section times): advisory only.
     p = sub.add_parser("search", help="class search: list courses and their sections/times for a term (read-only)")
     p.add_argument("--term", help="term strm code or label substring; a substring must match exactly one term "
-                                  "(ambiguous ones are refused with candidate terms); omitted = the newest term "
-                                  "whose start year is not in the future")
+                                  "(ambiguous ones are refused with candidate terms); omitted = the last listed "
+                                  "term of the current or a past academic year (SIS lists Summer before Term 1/2, "
+                                  "so this lands on the term registration target)")
     p.add_argument("--subject", help="subject code (e.g. AIE, CSC, ENG)")
     p.add_argument("--catalog", help="catalog number (e.g. 1904); combine with --subject")
     p.add_argument("--contains", action="store_true", help="match the catalog number by contains instead of exact")
@@ -411,8 +419,8 @@ def main(argv=None) -> int:
         p = sub.add_parser(comp, help=label)
         p.add_argument("--format", choices=["text", "json"], default="text")
         if comp != "history":
-            p.add_argument("--term", help="term label substring or strm code (defaults to the page's newest term; "
-                                          "e.g. '2026-27 Term 2' or 2620)")
+            p.add_argument("--term", help="term label substring or strm code (omitted = the newest term by "
+                                          "label ordering, not page order; e.g. '2026-27 Term 2' or 2620)")
 
     p = sub.add_parser("center", help="student center page (text summary)")
     p.add_argument("--format", choices=["text", "json"], default="text")

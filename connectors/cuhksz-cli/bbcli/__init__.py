@@ -10,4 +10,4 @@ Since cuhksz-cli 0.2.1 this module ships in the `cuhkszcli` distribution;
 the legacy `bb-cli` entry point was removed in 0.3.0.
 """
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
