@@ -112,8 +112,9 @@ def ic_state_fields(payload: str) -> dict[str, str]:
 # above — assigning one name twice used to shadow the unanchored scan.
 _TERM_DROPDOWN_LABEL = re.compile(r"^(\d{4})-(\d{2})\s+(?:Term\s+\d|Summer Session)", re.I)
 # PeopleSoft strm derivation from the same label: <yy><term digit><0>, e.g.
-# 2026-27 Term 2 → 2620 (verified against the Class Search dropdown). Summer
-# Session follows Term 2 in the scheme, so it maps to 2630.
+# 2026-27 Term 2 → 2620 (verified against the Class Search dropdown). The
+# third position is the session digit: Term 1 → 1, Term 2 → 2, Summer → 5
+# (live dropdown: 2025-26 Summer = 2550, 2026-27 Summer = 2650).
 _TERM_STRM_LABEL = re.compile(r"^(\d{4})-\d{2}\s+(?:Term\s+(\d)|Summer Session)", re.I)
 
 
@@ -138,7 +139,8 @@ def term_strm(label: str) -> str | None:
     m = _TERM_STRM_LABEL.match(label)
     if not m:
         return None
-    return f"{int(m.group(1)) % 100:02d}{m.group(2) or '3'}0"
+    digit = m.group(2) or "5"  # Summer Session → 5 (live: 2550 / 2650)
+    return f"{int(m.group(1)) % 100:02d}{digit}0"
 
 
 def match_terms(terms: list[dict], query: str) -> list[dict]:

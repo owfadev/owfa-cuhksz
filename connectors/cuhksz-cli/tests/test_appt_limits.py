@@ -195,7 +195,8 @@ class TermStrmTests(unittest.TestCase):
         self.assertEqual(parser.term_strm("2026-27 Term 1"), "2610")
         self.assertEqual(parser.term_strm("2026-27 Term 2"), "2620")
         self.assertEqual(parser.term_strm("2025-26 Term 2"), "2520")
-        self.assertEqual(parser.term_strm("2025-26 Summer Session"), "2530")
+        self.assertEqual(parser.term_strm("2025-26 Summer Session"), "2550")
+        self.assertEqual(parser.term_strm("2026-27 Summer Session"), "2650")
         self.assertIsNone(parser.term_strm("not a term"))
 
     def test_term_query_accepts_a_strm_code_or_a_label(self):
