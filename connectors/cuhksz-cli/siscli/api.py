@@ -6,7 +6,7 @@ import re
 
 from . import config, parser
 from .auth import login
-from .transport import Transport
+from .transport import Transport, extract_win0_form
 
 
 class Sis:
@@ -82,6 +82,74 @@ class Sis:
 
     def schedule(self) -> dict:
         return parser.parse_weekly(self.component_html("schedule"))
+
+    def class_search(self, term: str | None = None, subject: str | None = None,
+                     catalog: str | None = None, career: str | None = None,
+                     open_only: bool = True, contains: bool = False) -> dict:
+        """Read-only Class Search: list courses and their sections/times for a term.
+
+        SIS wants at least two criteria (a term plus a subject and/or catalog
+        number), so no subject/catalog at all is refused up front with an
+        actionable message. The search is a two-step AJAX flow on the same
+        component (verified live 2026-11-23): a change-event POST primes the
+        component state, then the search POST copies `ICStateNum`/`ICSID`/
+        `ICResubmit` back and triggers `CLASS_SRCH_WRK2_SSR_PB_CLASS_SRCH`.
+        Advisory only: nothing is added to a cart and no state is changed.
+        """
+        if not subject and not catalog:
+            raise SystemExit(
+                "Class search needs at least two criteria: pass --subject and/or "
+                "--catalog together with a term (e.g. `cuhksz-cli sis search "
+                "--subject AIE --catalog 1904`). A subject alone can match, but "
+                "adding --catalog narrows the result; more than "
+                f"{config.CLASS_SEARCH_MAX_CLASSES} classes is refused by SIS.")
+        html = self.component_html("class_search")
+        terms = parser.class_search_terms(html)
+        if not terms:
+            raise SystemExit(
+                "Class Search page exposes no term dropdown (page structure "
+                "changed; re-run with SIS_CLI_DEBUG=<dir> to capture evidence)")
+        if term:
+            pick = next((r for r in terms
+                         if term.lower() in r["label"].lower() or term == r["strm"]), None)
+            if pick is None:
+                options = [f"{r['label']} ({r['strm']})" for r in terms]
+                raise SystemExit(f"Term not matched: {term!r}; available: {options}")
+        else:
+            pick = terms[-1]  # page order is oldest → newest; the last is the newest
+        strm = pick["strm"]
+        action, fields = extract_win0_form(html)
+
+        # Step 1 — change event: write the criteria into the component state.
+        change = dict(fields)
+        change.update({"ICAJAX": "1", "ICNAVTYPEDROPDOWN": "0",
+                       "ICChanged": "1", "ICAction": "None",
+                       config.CLASS_SEARCH_OPEN_FIELD: "Y" if open_only else "N"})
+        # Keep the career field explicitly empty by default: sending UGCU
+        # yields 0 results (verified live); a caller may still override it.
+        change[config.CLASS_SEARCH_CAREER_FIELD] = career or ""
+        change[config.CLASS_SEARCH_TERM_FIELD] = strm
+        if subject:
+            change[config.CLASS_SEARCH_SUBJECT_FIELD] = subject
+        if catalog:
+            change[config.CLASS_SEARCH_CATALOG_FIELD] = catalog
+            change[config.CLASS_SEARCH_EXACT_FIELD] = "C" if contains else "E"
+        step1 = self.transport.post_ajax(action, change, timeout=60)
+
+        # Step 2 — search: same fields + state echoed by step 1.
+        step2 = dict(change)
+        step2.update(parser.ic_state_fields(step1))
+        step2["ICChanged"] = "-1"
+        step2["ICAction"] = config.CLASS_SEARCH_ACTION
+        payload = self.transport.post_ajax(action, step2, timeout=90)
+        data = parser.parse_class_search(payload)
+        out = {"term": pick["label"], "strm": strm,
+               "subject": subject, "catalog": catalog,
+               "career": career or None, "open_only": open_only,
+               "contains": contains, "courses": data["courses"]}
+        if data.get("notice"):
+            out["notice"] = data["notice"]
+        return out
 
     def schedule_with_days(self) -> dict:
         """Weekly schedule + day-of-week attribution from the student center page (the center page is the authoritative source)."""

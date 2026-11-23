@@ -1,8 +1,8 @@
 schema_version: 1
 id: cuhksz
-version: 0.3.0
+version: 0.4.0
 compat: ">= 0.5.2"
-members: [cuhksz, bb, bb-map, bb-quiz, bb-teach, bb-track, sis, registry]
+members: [cuhksz, bb, bb-map, bb-quiz, bb-teach, bb-track, sis, sis-course, registry]
 connectors:
   - name: cuhksz-cli
     path: connectors/cuhksz-cli
@@ -22,4 +22,5 @@ menu:
   bb-teach: fine-grained teaching — mode-matrix explanations from the profile
   bb-quiz: self-testing — generated practice, grading flows back to the profile
   sis: student records — transcripts, timetable, enrollment windows
+  sis-course: course-catalog advisory — Class Search courses/sections/times (query-only, read-only)
   registry: academic regulations — materialized policies + index

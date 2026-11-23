@@ -10,6 +10,8 @@ import re
 
 from bs4 import BeautifulSoup
 
+from . import config
+
 _COURSE_CODE = re.compile(r"^[A-Z]{2,4}\s\d{3,4}\s-\s[A-Z]\d{2}")
 _COURSE_CODE_TIGHT = re.compile(r"^[A-Z]{2,4}\s\d{3,4}$")
 _TERM_LABEL = re.compile(r"\d{4}-\d{2}\s+(?:Term\s+\d|Summer Session)")
@@ -33,6 +35,91 @@ def parse_terms(html: str) -> list[dict]:
         seen.add(label)
         out.append({"idx": rad.get("value"), "term": label})
     return out
+
+
+def class_search_terms(html: str) -> list[dict]:
+    """Term dropdown on the Class Search page: [{"strm", "label"}] (empty option excluded).
+
+    The option order is the page order (oldest → newest), so the last entry is
+    the newest term; labels look like "2026-27 Term 2" and strm like "2620".
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    sel = soup.find("select", {"name": config.CLASS_SEARCH_TERM_FIELD})
+    if sel is None:
+        return []
+    out = []
+    for opt in sel.find_all("option"):
+        strm = (opt.get("value") or "").strip()
+        label = opt.get_text(" ", strip=True)
+        if strm:
+            out.append({"strm": strm, "label": label})
+    return out
+
+
+def ic_state_fields(html: str) -> dict[str, str]:
+    """PeopleSoft component state inputs (ICStateNum/ICSID/ICResubmit) echoed by an AJAX response.
+
+    Class Search step 2 must copy these back from the step-1 response; missing
+    fields simply stay absent (the caller overlays what is present).
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    out: dict[str, str] = {}
+    for inp in soup.find_all("input"):
+        name = inp.get("name")
+        if name in ("ICStateNum", "ICSID", "ICResubmit"):
+            out[name] = inp.get("value") or ""
+    return out
+
+
+_CDATA_BLOCK = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.S)
+_CLASS_SEARCH_WARNING = re.compile(r"<PAGE[^>]*id=['\"]SSR_SS_WARNING['\"]", re.I)
+
+
+def parse_class_search(payload: str) -> dict:
+    """Class Search response → {"courses": [...], "notice": optional}.
+
+    The response is an XML wrapper (`<PAGE id='SSR_CLSRCH_RSLT'>`) whose real
+    HTML sits in CDATA blocks: concatenate them, then parse. Beyond ~50 classes
+    the server answers with an `SSR_SS_WARNING` page instead of results, which
+    is surfaced as a structured notice (no courses). Course headers are the
+    `win0divDERIVED_CLSRCH_DESCR200$…` divs; a section is a
+    `DERIVED_CLSRCH_SSR_CLASSNAME_LONG$…` element; meeting rows contribute
+    `MTG_DAYTIME` times (1–2 per section), the first `MTG_ROOM`/`MTG_INSTR`.
+    """
+    if "over 50 classes" in payload or _CLASS_SEARCH_WARNING.search(payload):
+        return {"courses": [], "notice": (
+            "SIS refused the query because it matched more than "
+            f"{config.CLASS_SEARCH_MAX_CLASSES} classes; add a subject and/or "
+            "catalog number to narrow it (e.g. --subject AIE --catalog 1904) "
+            "and retry")}
+    html = "".join(_CDATA_BLOCK.findall(payload)) or payload
+    soup = BeautifulSoup(html, "html.parser")
+    courses: list[dict] = []
+    current: dict | None = None
+    section: dict | None = None
+    for el in soup.find_all(id=True):
+        eid = el.get("id") or ""
+        if (eid.startswith("win0divDERIVED_CLSRCH_DESCR200$")
+                or eid.startswith("DERIVED_CLSRCH_DESCR200$")):
+            text = el.get_text(" ", strip=True)
+            if text and (current is None or text != current["course"]):
+                current = {"course": text, "sections": []}
+                courses.append(current)
+                section = None
+        elif eid.startswith("DERIVED_CLSRCH_SSR_CLASSNAME_LONG$") and "span" not in eid:
+            text = el.get_text(" ", strip=True)
+            if current is not None and text:
+                section = {"section": text, "times": [], "room": None, "instructor": None}
+                current["sections"].append(section)
+        elif section is not None and eid.startswith("MTG_DAYTIME") and not eid.endswith("lbl"):
+            t = el.get_text(" ", strip=True)
+            if t and t not in section["times"]:
+                section["times"].append(t)
+        elif section is not None and eid.startswith("MTG_ROOM") and section["room"] is None:
+            section["room"] = el.get_text(" ", strip=True) or None
+        elif section is not None and eid.startswith("MTG_INSTR") and section["instructor"] is None:
+            section["instructor"] = el.get_text(" ", strip=True) or None
+    return {"courses": courses}
 
 
 def parse_grade_report(html: str) -> dict:

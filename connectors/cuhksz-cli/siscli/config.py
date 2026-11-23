@@ -67,7 +67,20 @@ COMPONENTS = {
     "prsnldata": ("CC_PORTFOLIO.SSS_PRSNLDATA_SUMM.GBL", "HC_SSS_PRSNLDATA_SUMM_GBL"),
     # Degree progress report (My Academic Requirements) — currently shows "page not available" (needs Request Audit; under observation)
     "dpr": ("SA_LEARNER_SERVICES.SAA_SS_DPR_ADB.GBL", "HC_SAA_SS_DPR_ADB_GBL"),
+    # Class Search (course catalog + section times) — a two-step AJAX query flow, read-only
+    "class_search": ("SA_LEARNER_SERVICES.CLASS_SEARCH.GBL", "HC_CLASS_SEARCH"),
 }
+# Class Search (course catalog) two-step AJAX field names — verified live 2026-11-23.
+# SSR_CLSRCH_WRK_ACAD_CAREER$2 must stay EMPTY: sending "UGCU" yields 0 results.
+CLASS_SEARCH_TERM_FIELD = "CLASS_SRCH_WRK2_STRM$35$"
+CLASS_SEARCH_SUBJECT_FIELD = "SSR_CLSRCH_WRK_SUBJECT$0"
+CLASS_SEARCH_CATALOG_FIELD = "SSR_CLSRCH_WRK_CATALOG_NBR$1"
+CLASS_SEARCH_EXACT_FIELD = "SSR_CLSRCH_WRK_SSR_EXACT_MATCH1$1"
+CLASS_SEARCH_CAREER_FIELD = "SSR_CLSRCH_WRK_ACAD_CAREER$2"
+CLASS_SEARCH_OPEN_FIELD = "SSR_CLSRCH_WRK_SSR_OPEN_ONLY$chk$3"
+CLASS_SEARCH_ACTION = "CLASS_SRCH_WRK2_SSR_PB_CLASS_SRCH"
+CLASS_SEARCH_MAX_CLASSES = 50  # the server returns an SSR_SS_WARNING page beyond this
+
 # ICAction constants (verified 2026-10-05)
 IC_VIEW_REPORT = "CUSZ_TSRQST_WRK_VIEW_PB"  # transcript View Report button
 TRANSCRIPT_TYPES = {"eng": "UE01", "chi": "UC01", "ge-edu": "UFCEC"}
